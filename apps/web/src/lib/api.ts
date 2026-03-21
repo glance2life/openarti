@@ -1,3 +1,5 @@
+import { headers } from "next/headers";
+
 const API_URL = process.env.OPENARTI_API_URL || "http://localhost:3001";
 
 export async function apiFetch<T>(
@@ -5,9 +7,24 @@ export async function apiFetch<T>(
   path: string,
   body?: unknown
 ): Promise<T> {
+  const reqHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  // Forward session cookie from incoming request
+  try {
+    const h = await headers();
+    const cookie = h.get("cookie");
+    if (cookie) {
+      reqHeaders["Cookie"] = cookie;
+    }
+  } catch {
+    // Not in a server component context — skip cookie forwarding
+  }
+
   const res = await fetch(`${API_URL}${path}`, {
     method,
-    headers: { "Content-Type": "application/json" },
+    headers: reqHeaders,
     body: body ? JSON.stringify(body) : undefined,
     cache: "no-store",
   });

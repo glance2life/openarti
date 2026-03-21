@@ -29,7 +29,7 @@ beforeAll(async () => {
   // Create test user
   const [user] = await db
     .insert(schema.users)
-    .values({ email: TEST_USER_EMAIL, name: "test" })
+    .values({ id: crypto.randomUUID(), email: TEST_USER_EMAIL, name: "test", emailVerified: false, updatedAt: new Date() })
     .onConflictDoNothing()
     .returning();
 

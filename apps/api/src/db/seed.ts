@@ -1,23 +1,37 @@
 import crypto from "node:crypto";
+import { eq } from "drizzle-orm";
 import { db, schema } from "./index.js";
+import { auth } from "../auth.js";
 
 async function seed() {
   console.log("Seeding database...");
 
-  // Create default user
-  const [user] = await db
-    .insert(schema.users)
-    .values({
-      email: "admin@openarti.dev",
-      name: "admin",
-    })
-    .onConflictDoNothing()
-    .returning();
+  const email = process.env.ADMIN_EMAIL || "admin@openarti.dev";
+  const password =
+    process.env.ADMIN_PASSWORD || crypto.randomBytes(12).toString("base64url");
 
-  if (!user) {
-    console.log("User already exists, skipping seed.");
+  // Check if user already exists
+  const [existing] = await db
+    .select()
+    .from(schema.users)
+    .where(eq(schema.users.email, email))
+    .limit(1);
+
+  if (existing) {
+    console.log("Admin user already exists, skipping seed.");
     process.exit(0);
   }
+
+  // Create admin user via better-auth
+  const { user } = await auth.api.signUpEmail({
+    body: { name: "admin", email, password },
+  });
+
+  // Set role to admin
+  await db
+    .update(schema.users)
+    .set({ role: "admin" })
+    .where(eq(schema.users.id, user.id));
 
   // Create default team
   const [team] = await db
@@ -43,10 +57,12 @@ async function seed() {
   });
 
   console.log("\n--- Seed Complete ---");
-  console.log(`User:    ${user.email}`);
-  console.log(`Team:    ${team.name}`);
-  console.log(`API Key: ${rawKey}`);
-  console.log("Save this key — it cannot be retrieved again.\n");
+  console.log(`Email:    ${email}`);
+  console.log(`Password: ${password}`);
+  console.log(`Role:     admin`);
+  console.log(`Team:     ${team.name}`);
+  console.log(`API Key:  ${rawKey}`);
+  console.log("Save these credentials — they cannot be retrieved again.\n");
 
   process.exit(0);
 }
