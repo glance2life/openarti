@@ -16,7 +16,7 @@ AI agents produce valuable artifacts — specs, designs, API docs, diagrams — 
 ## CLI Usage
 
 ```bash
-npm install -g openarti
+npm install -g openarti-cli
 export OPENARTI_TOKEN=oai_xxx
 
 # Write
