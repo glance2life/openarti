@@ -43,6 +43,11 @@ jobs:
       - name: Test CLI
         run: pnpm --filter openarti test
 
+      - name: Migrate test database
+        run: pnpm --filter @openarti/api db:generate && pnpm --filter @openarti/api db:migrate
+        env:
+          DATABASE_URL: postgresql://openarti_test:openarti_test@localhost:5433/openarti_test
+
       - name: Test API
         run: pnpm --filter @openarti/api test
         env:
