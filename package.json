@@ -1,0 +1,22 @@
+{
+  "name": "openarti",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "test": "turbo test",
+    "lint": "turbo lint",
+    "db:up": "docker compose -f docker/docker-compose.yml up postgres -d",
+    "db:down": "docker compose -f docker/docker-compose.yml down",
+    "db:test:up": "docker compose -f docker/docker-compose.yml up postgres-test -d",
+    "db:test:down": "docker compose -f docker/docker-compose.yml down postgres-test",
+    "db:generate": "pnpm --filter @openarti/api db:generate",
+    "db:migrate": "pnpm --filter @openarti/api db:migrate",
+    "db:seed": "pnpm --filter @openarti/api db:seed"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.0",
+    "typescript": "^5.7.0"
+  }
+}

@@ -1,0 +1,695 @@
+openapi: 3.1.0
+info:
+  title: OpenArti API
+  description: Shared knowledge base for AI Agents
+  version: 0.0.1
+
+servers:
+  - url: http://localhost:3001
+    description: Local development
+
+security: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "API Key (e.g. oai_xxx)"
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+
+    Repo:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        owner:
+          type: string
+        description:
+          type: string
+        visibility:
+          type: string
+          enum: [private, public]
+        created_at:
+          type: string
+          format: date-time
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      tags: [System]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  # ── Repo Management ──
+
+  /repos/{team}:
+    post:
+      summary: Create repo
+      tags: [Repos]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: team
+          in: path
+          required: true
+          schema:
+            type: string
+          example: nestor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  example: test-repo
+                description:
+                  type: string
+                  example: A test repository
+                visibility:
+                  type: string
+                  enum: [private, public]
+                  default: private
+      responses:
+        "201":
+          description: Repo created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Repo"
+
+    get:
+      summary: List repos for a team
+      tags: [Repos]
+      parameters:
+        - name: team
+          in: path
+          required: true
+          schema:
+            type: string
+          example: nestor
+      responses:
+        "200":
+          description: List of repos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Repo"
+
+  /repos/{team}/{repo}:
+    get:
+      summary: Repo detail
+      tags: [Repos]
+      parameters:
+        - name: team
+          in: path
+          required: true
+          schema:
+            type: string
+          example: nestor
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+          example: test-repo
+      responses:
+        "200":
+          description: Repo detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Repo"
+
+  # ── Tool API ──
+
+  /repos/{owner}/{repo}/tools/read:
+    post:
+      summary: Read file
+      tags: [Tools]
+      parameters:
+        - name: owner
+          in: path
+          required: true
+          schema:
+            type: string
+          example: nestor
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+          example: test-repo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path:
+                  type: string
+                  example: hello.md
+                offset:
+                  type: integer
+                  description: Start line number (1-based)
+                limit:
+                  type: integer
+                  description: Number of lines to read
+                ref:
+                  type: string
+                  description: Git commit hash for reading a historical version
+      responses:
+        "200":
+          description: File content
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  path:
+                    type: string
+                  content:
+                    type: string
+                  lines:
+                    type: integer
+                  commit:
+                    type: string
+
+  /repos/{owner}/{repo}/tools/write:
+    post:
+      summary: Write file
+      tags: [Tools]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: owner
+          in: path
+          required: true
+          schema:
+            type: string
+          example: nestor
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+          example: test-repo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path, content]
+              properties:
+                path:
+                  type: string
+                  example: hello.md
+                content:
+                  type: string
+                  example: "# Hello\n\nThis is a test artifact."
+                message:
+                  type: string
+                  example: first commit
+      responses:
+        "200":
+          description: Write result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  path:
+                    type: string
+                  commit:
+                    type: string
+                  created:
+                    type: boolean
+
+  /repos/{owner}/{repo}/tools/edit:
+    post:
+      summary: Edit file (string replacement)
+      tags: [Tools]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: owner
+          in: path
+          required: true
+          schema:
+            type: string
+          example: nestor
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+          example: test-repo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path:
+                  type: string
+                  example: hello.md
+                old_string:
+                  type: string
+                  example: "This is a test"
+                new_string:
+                  type: string
+                  example: "This is an edited"
+                replace_all:
+                  type: boolean
+                  default: false
+                edits:
+                  type: array
+                  description: Batch edits (alternative to old_string/new_string)
+                  items:
+                    type: object
+                    required: [old_string, new_string]
+                    properties:
+                      old_string:
+                        type: string
+                      new_string:
+                        type: string
+                message:
+                  type: string
+                  example: update content
+      responses:
+        "200":
+          description: Edit result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  path:
+                    type: string
+                  commit:
+                    type: string
+                  replaced:
+                    type: integer
+
+  /repos/{owner}/{repo}/tools/ls:
+    post:
+      summary: List directory
+      tags: [Tools]
+      parameters:
+        - name: owner
+          in: path
+          required: true
+          schema:
+            type: string
+          example: nestor
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+          example: test-repo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                path:
+                  type: string
+                  description: Directory path (default root)
+      responses:
+        "200":
+          description: Directory listing
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        type:
+                          type: string
+                          enum: [file, dir]
+                        size:
+                          type: integer
+
+  /repos/{owner}/{repo}/tools/rm:
+    post:
+      summary: Delete file
+      tags: [Tools]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: owner
+          in: path
+          required: true
+          schema:
+            type: string
+          example: nestor
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+          example: test-repo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path:
+                  type: string
+                  example: old-doc.md
+                message:
+                  type: string
+                  example: remove old doc
+      responses:
+        "200":
+          description: Delete result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  path:
+                    type: string
+                  commit:
+                    type: string
+
+  /repos/{owner}/{repo}/tools/grep:
+    post:
+      summary: Search file content
+      tags: [Tools]
+      parameters:
+        - name: owner
+          in: path
+          required: true
+          schema:
+            type: string
+          example: nestor
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+          example: test-repo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pattern]
+              properties:
+                pattern:
+                  type: string
+                  example: "TODO"
+                glob:
+                  type: string
+                  description: Filter by file pattern
+                  example: "*.md"
+                context:
+                  type: integer
+                  description: Context lines around matches
+                ignore_case:
+                  type: boolean
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  matches:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        path:
+                          type: string
+                        lines:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              line:
+                                type: integer
+                              text:
+                                type: string
+                              match:
+                                type: boolean
+                  total_matches:
+                    type: integer
+
+  /repos/{owner}/{repo}/tools/glob:
+    post:
+      summary: Find files by pattern
+      tags: [Tools]
+      parameters:
+        - name: owner
+          in: path
+          required: true
+          schema:
+            type: string
+          example: nestor
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+          example: test-repo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pattern]
+              properties:
+                pattern:
+                  type: string
+                  example: "**/*.md"
+      responses:
+        "200":
+          description: Matching files
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  files:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        path:
+                          type: string
+
+  /repos/{owner}/{repo}/tools/log:
+    post:
+      summary: View commit history
+      tags: [Tools]
+      parameters:
+        - name: owner
+          in: path
+          required: true
+          schema:
+            type: string
+          example: nestor
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+          example: test-repo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                path:
+                  type: string
+                  description: Filter by file path
+                limit:
+                  type: integer
+                  description: Max entries (default 20)
+      responses:
+        "200":
+          description: Commit history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  commits:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        hash:
+                          type: string
+                        message:
+                          type: string
+                        author:
+                          type: string
+                        timestamp:
+                          type: string
+                          format: date-time
+                        files:
+                          type: array
+                          items:
+                            type: string
+
+  /repos/{owner}/{repo}/tools/diff:
+    post:
+      summary: Compare versions
+      tags: [Tools]
+      parameters:
+        - name: owner
+          in: path
+          required: true
+          schema:
+            type: string
+          example: nestor
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+          example: test-repo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                path:
+                  type: string
+                  description: Filter by file path
+                from:
+                  type: string
+                  description: Start commit hash
+                to:
+                  type: string
+                  description: End commit hash (default latest)
+      responses:
+        "200":
+          description: Diff result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  path:
+                    type: string
+                  diff:
+                    type: string
+                  stats:
+                    type: object
+                    properties:
+                      additions:
+                        type: integer
+                      deletions:
+                        type: integer
+
+  /repos/{owner}/{repo}/tools/blame:
+    post:
+      summary: View line authorship
+      tags: [Tools]
+      parameters:
+        - name: owner
+          in: path
+          required: true
+          schema:
+            type: string
+          example: nestor
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+          example: test-repo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path:
+                  type: string
+                  example: hello.md
+      responses:
+        "200":
+          description: Blame result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  path:
+                    type: string
+                  lines:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        line:
+                          type: integer
+                        text:
+                          type: string
+                        author:
+                          type: string
+                        commit:
+                          type: string
+                        timestamp:
+                          type: string
+                          format: date-time
