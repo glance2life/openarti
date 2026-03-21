@@ -1,9 +1,10 @@
-import { pgTable, text, timestamp, boolean, index, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, integer, index, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
 
 // ---- Enums ----
 
 export const memberRoleEnum = pgEnum("member_role", ["owner", "member"]);
 export const visibilityEnum = pgEnum("visibility", ["private", "public"]);
+export const pinTargetTypeEnum = pgEnum("pin_target_type", ["repo", "file", "dir"]);
 
 // ---- better-auth managed tables ----
 
@@ -144,3 +145,24 @@ export const invitations = pgTable("invitations", {
   acceptedAt: timestamp("accepted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const pins = pgTable(
+  "pins",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    teamId: text("team_id")
+      .notNull()
+      .references(() => teams.id, { onDelete: "cascade" }),
+    targetType: pinTargetTypeEnum("target_type").notNull(),
+    targetPath: text("target_path").notNull(),
+    displayOrder: integer("display_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("pins_user_team_path").on(t.userId, t.teamId, t.targetPath),
+    index("pins_user_team_idx").on(t.userId, t.teamId),
+  ]
+);

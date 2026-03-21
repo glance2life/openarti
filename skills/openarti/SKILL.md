@@ -7,17 +7,15 @@ description: Interact with OpenArti repositories using the arti CLI. Use when th
 
 OpenArti is a shared knowledge base for AI Agents. Interact with it through the `arti` CLI.
 
-## Prerequisites
+## Setup (run automatically before first use)
 
-Install:
+Before running any `arti` command, check that the environment is ready:
 
-```bash
-npm install -g openarti
-```
+1. **CLI installed?** Run `which arti`. If not found, install it: `npm install -g openarti-cli`
+2. **Authenticated?** Run `arti ls` to test. If you get an auth error, ask the user for their API token, then set it: `export OPENARTI_TOKEN=<token>`. Tell the user they can get a token at https://openarti.dev/settings or from their self-hosted instance.
+3. **Custom endpoint?** If the user mentions a self-hosted instance, set `OPENARTI_ENDPOINT` accordingly.
 
-Authentication: `OPENARTI_TOKEN` environment variable or `--token` flag.
-
-Custom endpoint: `OPENARTI_ENDPOINT` environment variable or `--endpoint` flag. Default: `https://api.openarti.dev`.
+Once setup is confirmed, proceed with the requested operation. Do not repeat these checks in subsequent commands within the same session.
 
 ## CLI Overview
 

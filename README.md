@@ -4,21 +4,49 @@
 
 Different agents — Claude Code, Cursor, Codex CLI, and others — read and write artifacts to a shared repository. Humans review and browse them in the browser. Think of it as Git for AI-generated content: versioned, searchable, and accessible from any agent.
 
-## Why OpenArti?
-
-AI agents produce valuable artifacts — specs, designs, API docs, diagrams — but they're scattered across chat sessions and local files. OpenArti gives them a shared, persistent home:
+[CLI Reference](#cli-reference) | [Self-Hosting](#self-hosting) | [Project Structure](#project-structure)
 
 - **Agent-native access** — CLI and Skill designed for agents, not just humans
 - **Version controlled** — every write is a commit with full history, diff, and blame
 - **Browser rendering** — Markdown, Mermaid, HTML, code — all rendered in the web UI
 - **Self-hostable** — full-stack open source, deploy with Docker Compose
 
-## CLI Usage
+## Quick Start
+
+Install the skill in your agent (Claude Code, Cursor, or any agent that supports [skills](https://skills.sh)):
 
 ```bash
-npm install -g openarti-cli
-export OPENARTI_TOKEN=oai_xxx
+npx skills add openarti/openarti@openarti
+```
 
+Then just ask your agent:
+
+> "Read the files in myteam/docs and summarize them"
+
+The agent will automatically install the `arti` CLI and prompt you for an API token on first use.
+
+## CLI Reference
+
+```
+arti
+├── read <owner/repo/path>          Read a file
+├── write <owner/repo/path>         Write a file (stdin)
+├── edit <owner/repo/path>          Edit a file (string replacement)
+├── rm <owner/repo/path>            Delete a file
+├── ls <owner/repo> [path]          List directory
+├── grep <pattern> <owner/repo>     Search file content
+├── glob <pattern> <owner/repo>     Find files by pattern
+├── log <owner/repo> [path]         Commit history
+├── diff <owner/repo> [path]        Compare versions
+├── blame <owner/repo/path>         Line-by-line authorship
+└── repo
+    ├── create <team/name>          Create a repository
+    └── list <team>                 List repositories
+```
+
+**Examples:**
+
+```bash
 # Write
 echo "# API Design" | arti write team/docs/api.md -m "initial draft"
 
@@ -37,13 +65,7 @@ arti log team/docs
 arti edit team/docs/api.md --old "v1" --new "v2" -m "update version"
 ```
 
-## Agent Skill
-
-Install the OpenArti skill so your agent knows how to use the CLI:
-
-```bash
-npx skills add openarti/openarti@openarti
-```
+Global options: `--token <token>`, `--endpoint <url>`
 
 ## Self-Hosting
 
@@ -80,6 +102,12 @@ This starts:
 - **API** at `http://localhost:3001`
 - **Web** at `http://localhost:3000`
 
+Point your CLI to your local instance:
+
+```bash
+export OPENARTI_ENDPOINT=http://localhost:3001
+```
+
 ### Stopping
 
 ```bash
@@ -100,14 +128,6 @@ skills/
 docker/         Docker Compose + Dockerfiles
 openapi.yaml    OpenAPI spec
 ```
-
-## Tech Stack
-
-- **API**: Hono, Drizzle ORM, PostgreSQL, Git (bare repos)
-- **Web**: Next.js 15, React 19, Tailwind CSS
-- **CLI**: Commander.js
-- **Monorepo**: pnpm workspaces + Turborepo
-
 ## License
 
 [MIT](LICENSE)

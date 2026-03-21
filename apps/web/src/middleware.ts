@@ -1,21 +1,24 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+const PUBLIC_PATHS = ["/login", "/register"];
+
 export function middleware(request: NextRequest) {
   const session = request.cookies.get("better-auth.session_token");
   const { pathname } = request.nextUrl;
+  const isPublicPath = PUBLIC_PATHS.includes(pathname);
 
-  if (pathname.startsWith("/settings") && !session) {
+  if (!isPublicPath && !session) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  if ((pathname === "/login" || pathname === "/register") && session) {
-    return NextResponse.redirect(new URL("/settings", request.url));
+  if (isPublicPath && session) {
+    return NextResponse.redirect(new URL("/", request.url));
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/login", "/register", "/settings/:path*"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api).*)"],
 };

@@ -1,6 +1,19 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Copy, Trash2 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
@@ -50,81 +63,87 @@ export function ApiKeys() {
     fetchKeys();
   }
 
-  if (loading) return <p className="text-sm text-gray-500">Loading...</p>;
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
       {newKey && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <p className="text-sm font-medium text-green-800 mb-1">
-            API key created — copy it now, it won&apos;t be shown again:
-          </p>
-          <code className="block bg-white border rounded px-3 py-2 text-sm font-mono break-all">
-            {newKey}
-          </code>
-          <button
-            onClick={() => {
-              navigator.clipboard.writeText(newKey);
-            }}
-            className="mt-2 text-xs text-green-700 hover:underline"
-          >
-            Copy to clipboard
-          </button>
-        </div>
+        <Alert>
+          <AlertDescription>
+            <p className="mb-2 font-medium">
+              API key created — copy it now, it won&apos;t be shown again:
+            </p>
+            <code className="block rounded border bg-muted px-3 py-2 font-mono text-sm break-all">
+              {newKey}
+            </code>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-2 gap-2"
+              onClick={() => navigator.clipboard.writeText(newKey)}
+            >
+              <Copy className="size-3" />
+              Copy to clipboard
+            </Button>
+          </AlertDescription>
+        </Alert>
       )}
 
       <form onSubmit={handleCreate} className="flex gap-2">
-        <input
+        <Input
           type="text"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           placeholder="Key label (optional)"
-          className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+          className="flex-1"
         />
-        <button
-          type="submit"
-          className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors"
-        >
-          Create key
-        </button>
+        <Button type="submit">Create key</Button>
       </form>
 
       {keys.length === 0 ? (
-        <p className="text-sm text-gray-500">No API keys yet.</p>
+        <p className="text-sm text-muted-foreground">No API keys yet.</p>
       ) : (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b text-left text-gray-500">
-              <th className="pb-2 font-medium">Label</th>
-              <th className="pb-2 font-medium">Created</th>
-              <th className="pb-2 font-medium">Last used</th>
-              <th className="pb-2"></th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Label</TableHead>
+              <TableHead>Created</TableHead>
+              <TableHead>Last used</TableHead>
+              <TableHead className="w-[50px]" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {keys.map((key) => (
-              <tr key={key.id} className="border-b">
-                <td className="py-2">{key.label || "—"}</td>
-                <td className="py-2 text-gray-500">
+              <TableRow key={key.id}>
+                <TableCell>{key.label || "—"}</TableCell>
+                <TableCell className="text-muted-foreground">
                   {new Date(key.createdAt).toLocaleDateString()}
-                </td>
-                <td className="py-2 text-gray-500">
+                </TableCell>
+                <TableCell className="text-muted-foreground">
                   {key.lastUsedAt
                     ? new Date(key.lastUsedAt).toLocaleDateString()
                     : "Never"}
-                </td>
-                <td className="py-2 text-right">
-                  <button
+                </TableCell>
+                <TableCell>
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => handleDelete(key.id)}
-                    className="text-red-600 hover:underline text-xs"
                   >
-                    Delete
-                  </button>
-                </td>
-              </tr>
+                    <Trash2 className="size-4 text-destructive" />
+                  </Button>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       )}
     </div>
   );

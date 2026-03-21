@@ -5,6 +5,8 @@ import { tools } from "./routes/tools.js";
 import { repos } from "./routes/repos.js";
 import { apikeys } from "./routes/apikeys.js";
 import { admin } from "./routes/admin.js";
+import { user } from "./routes/user.js";
+import { pins } from "./routes/pins.js";
 import { errorHandler } from "./middleware/error.js";
 
 const app = new Hono();
@@ -30,12 +32,14 @@ app.get("/api/auth/config", (c) =>
 );
 
 // better-auth handler
-app.on(["POST", "GET"], "/api/auth/**", (c) => auth.handler(c.req.raw));
+app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
 // Mount routes
 app.route("/repos", tools);
 app.route("/repos", repos);
 app.route("/api-keys", apikeys);
 app.route("/admin", admin);
+app.route("/user", user);
+app.route("/pins", pins);
 
 export { app };

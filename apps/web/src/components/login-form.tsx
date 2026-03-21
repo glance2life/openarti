@@ -2,6 +2,11 @@
 
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export function LoginForm({ googleOAuth }: { googleOAuth: boolean }) {
   const [email, setEmail] = useState("");
@@ -17,7 +22,7 @@ export function LoginForm({ googleOAuth }: { googleOAuth: boolean }) {
     const { error } = await authClient.signIn.email({
       email,
       password,
-      callbackURL: "/settings",
+      callbackURL: "/",
     });
 
     if (error) {
@@ -29,65 +34,57 @@ export function LoginForm({ googleOAuth }: { googleOAuth: boolean }) {
   async function handleGoogle() {
     await authClient.signIn.social({
       provider: "google",
-      callbackURL: "/settings",
+      callbackURL: "/",
     });
   }
 
   return (
     <div className="space-y-6">
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium mb-1">
-            Email
-          </label>
-          <input
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        <div className="grid gap-2">
+          <Label htmlFor="email">Email</Label>
+          <Input
             id="email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
           />
         </div>
-        <div>
-          <label htmlFor="password" className="block text-sm font-medium mb-1">
-            Password
-          </label>
-          <input
+        <div className="grid gap-2">
+          <Label htmlFor="password">Password</Label>
+          <Input
             id="password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
           />
         </div>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-gray-900 text-white py-2 rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors"
-        >
+        <Button type="submit" className="w-full" disabled={loading}>
           {loading ? "Signing in..." : "Sign in"}
-        </button>
+        </Button>
       </form>
 
       {googleOAuth && (
         <>
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white px-2 text-gray-500">or</span>
-            </div>
+          <div className="relative flex items-center gap-4">
+            <Separator className="flex-1" />
+            <span className="text-xs uppercase text-muted-foreground">or</span>
+            <Separator className="flex-1" />
           </div>
-          <button
+          <Button
+            variant="outline"
+            className="w-full"
             onClick={handleGoogle}
-            className="w-full border py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
           >
             Sign in with Google
-          </button>
+          </Button>
         </>
       )}
     </div>
