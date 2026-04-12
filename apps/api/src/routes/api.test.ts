@@ -5,8 +5,8 @@ import { app } from "../app.js";
 import { db, schema } from "../db/index.js";
 import { eq } from "drizzle-orm";
 
-const TEST_TEAM = "test-team";
-const TEST_REPO = "test-repo";
+const TEST_USERNAME = "testuser";
+const TEST_COLLECTION = "test-collection";
 const TEST_USER_EMAIL = "test@openarti.dev";
 
 let apiKey: string;
@@ -29,7 +29,7 @@ beforeAll(async () => {
   // Create test user
   const [user] = await db
     .insert(schema.users)
-    .values({ id: crypto.randomUUID(), email: TEST_USER_EMAIL, name: "test", emailVerified: false, updatedAt: new Date() })
+    .values({ id: crypto.randomUUID(), email: TEST_USER_EMAIL, name: "test", username: TEST_USERNAME, emailVerified: false, updatedAt: new Date() })
     .onConflictDoNothing()
     .returning();
 
@@ -43,29 +43,6 @@ beforeAll(async () => {
           .limit(1)
       )[0].id;
 
-  // Create test team
-  const [team] = await db
-    .insert(schema.teams)
-    .values({ name: TEST_TEAM })
-    .onConflictDoNothing()
-    .returning();
-
-  const teamId = team
-    ? team.id
-    : (
-        await db
-          .select()
-          .from(schema.teams)
-          .where(eq(schema.teams.name, TEST_TEAM))
-          .limit(1)
-      )[0].id;
-
-  // Add user as team owner
-  await db
-    .insert(schema.teamMembers)
-    .values({ teamId, userId, role: "owner" })
-    .onConflictDoNothing();
-
   // Generate API key
   apiKey = `oai_${crypto.randomBytes(24).toString("hex")}`;
   const keyHash = crypto.createHash("sha256").update(apiKey).digest("hex");
@@ -76,13 +53,11 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  // Clean up: delete team (cascades to members, repos)
-  await db.delete(schema.teams).where(eq(schema.teams.name, TEST_TEAM));
   await db.delete(schema.users).where(eq(schema.users.email, TEST_USER_EMAIL));
 
   // Clean up git data
   const gitDataDir = process.env.GIT_DATA_DIR || "./data/test-repos";
-  await fs.rm(`${gitDataDir}/${TEST_TEAM}`, { recursive: true, force: true });
+  await fs.rm(`${gitDataDir}/${TEST_USERNAME}`, { recursive: true, force: true });
 });
 
 describe("API", () => {
@@ -97,72 +72,72 @@ describe("API", () => {
   // ── Auth ──
 
   it("rejects requests without auth", async () => {
-    const res = await app.request("/repos/test-team", {
+    const res = await app.request("/collections", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "no-auth-repo" }),
+      body: JSON.stringify({ name: "no-auth-collection" }),
     });
     expect(res.status).toBe(401);
   });
 
   it("rejects requests with invalid auth", async () => {
-    const res = await app.request("/repos/test-team", {
+    const res = await app.request("/collections", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: "Bearer oai_invalid",
       },
-      body: JSON.stringify({ name: "bad-auth-repo" }),
+      body: JSON.stringify({ name: "bad-auth-collection" }),
     });
     expect(res.status).toBe(401);
   });
 
-  // ── Repos ──
+  // ── Collections ──
 
-  it("POST /repos/:team — create repo", async () => {
-    const res = await req("POST", "/repos/test-team", {
-      name: TEST_REPO,
+  it("POST /collections — create collection", async () => {
+    const res = await req("POST", "/collections", {
+      name: TEST_COLLECTION,
       visibility: "public",
-      description: "test repo",
+      description: "test collection",
     });
     expect(res.status).toBe(201);
     const body = await res.json();
-    expect(body.name).toBe(TEST_REPO);
-    expect(body.owner).toBe(TEST_TEAM);
+    expect(body.name).toBe(TEST_COLLECTION);
+    expect(body.owner).toBe(TEST_USERNAME);
     expect(body.visibility).toBe("public");
   });
 
-  it("POST /repos/:team — duplicate repo returns 409", async () => {
-    const res = await req("POST", "/repos/test-team", {
-      name: TEST_REPO,
+  it("POST /collections — duplicate collection returns 409", async () => {
+    const res = await req("POST", "/collections", {
+      name: TEST_COLLECTION,
     });
     expect(res.status).toBe(409);
   });
 
-  it("GET /repos/:team — list repos", async () => {
-    const res = await req("GET", "/repos/test-team");
+  it("GET /collections — list own collections", async () => {
+    const res = await req("GET", "/collections");
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.length).toBeGreaterThanOrEqual(1);
-    expect(body.some((r: { name: string }) => r.name === TEST_REPO)).toBe(true);
+    expect(body.some((r: { name: string }) => r.name === TEST_COLLECTION)).toBe(true);
   });
 
-  it("GET /repos/:team/:repo — repo detail", async () => {
-    const res = await req("GET", `/repos/test-team/${TEST_REPO}`);
+  it("GET /collections/:owner/:collection — collection detail", async () => {
+    const res = await req("GET", `/collections/${TEST_USERNAME}/${TEST_COLLECTION}`);
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.name).toBe(TEST_REPO);
+    expect(body.name).toBe(TEST_COLLECTION);
   });
 
-  it("GET /repos/:team/:repo — not found", async () => {
-    const res = await req("GET", "/repos/test-team/nonexistent");
+  it("GET /collections/:owner/:collection — not found", async () => {
+    const res = await req("GET", `/collections/${TEST_USERNAME}/nonexistent`);
     expect(res.status).toBe(404);
   });
 
   // ── Tools: write → read → edit → read → ls ──
 
   it("write — create a file", async () => {
-    const res = await req("POST", `/repos/test-team/${TEST_REPO}/tools/write`, {
+    const res = await req("POST", `/collections/${TEST_USERNAME}/${TEST_COLLECTION}/tools/write`, {
       path: "hello.md",
       content: "# Hello\n\nWorld\n",
       message: "create hello.md",
@@ -175,7 +150,7 @@ describe("API", () => {
   });
 
   it("read — read the file back", async () => {
-    const res = await req("POST", `/repos/test-team/${TEST_REPO}/tools/read`, {
+    const res = await req("POST", `/collections/${TEST_USERNAME}/${TEST_COLLECTION}/tools/read`, {
       path: "hello.md",
     });
     expect(res.status).toBe(200);
@@ -185,14 +160,14 @@ describe("API", () => {
   });
 
   it("read — file not found", async () => {
-    const res = await req("POST", `/repos/test-team/${TEST_REPO}/tools/read`, {
+    const res = await req("POST", `/collections/${TEST_USERNAME}/${TEST_COLLECTION}/tools/read`, {
       path: "nonexistent.md",
     });
     expect(res.status).toBe(404);
   });
 
   it("edit — replace string", async () => {
-    const res = await req("POST", `/repos/test-team/${TEST_REPO}/tools/edit`, {
+    const res = await req("POST", `/collections/${TEST_USERNAME}/${TEST_COLLECTION}/tools/edit`, {
       path: "hello.md",
       old_string: "World",
       new_string: "OpenArti",
@@ -204,7 +179,7 @@ describe("API", () => {
   });
 
   it("read — verify edit", async () => {
-    const res = await req("POST", `/repos/test-team/${TEST_REPO}/tools/read`, {
+    const res = await req("POST", `/collections/${TEST_USERNAME}/${TEST_COLLECTION}/tools/read`, {
       path: "hello.md",
     });
     expect(res.status).toBe(200);
@@ -214,7 +189,7 @@ describe("API", () => {
   });
 
   it("edit — old_string not found returns error", async () => {
-    const res = await req("POST", `/repos/test-team/${TEST_REPO}/tools/edit`, {
+    const res = await req("POST", `/collections/${TEST_USERNAME}/${TEST_COLLECTION}/tools/edit`, {
       path: "hello.md",
       old_string: "nonexistent text",
       new_string: "replacement",
@@ -223,7 +198,7 @@ describe("API", () => {
   });
 
   it("write — create a second file", async () => {
-    const res = await req("POST", `/repos/test-team/${TEST_REPO}/tools/write`, {
+    const res = await req("POST", `/collections/${TEST_USERNAME}/${TEST_COLLECTION}/tools/write`, {
       path: "notes.txt",
       content: "some notes\n",
     });
@@ -233,7 +208,7 @@ describe("API", () => {
   });
 
   it("ls — list files", async () => {
-    const res = await req("POST", `/repos/test-team/${TEST_REPO}/tools/ls`, {});
+    const res = await req("POST", `/collections/${TEST_USERNAME}/${TEST_COLLECTION}/tools/ls`, {});
     expect(res.status).toBe(200);
     const body = await res.json();
     const names = body.entries.map((e: { name: string }) => e.name);
@@ -244,7 +219,7 @@ describe("API", () => {
   // ── Tools: grep, glob, log, diff, blame, rm ──
 
   it("grep — search for pattern with matches", async () => {
-    const res = await req("POST", `/repos/test-team/${TEST_REPO}/tools/grep`, {
+    const res = await req("POST", `/collections/${TEST_USERNAME}/${TEST_COLLECTION}/tools/grep`, {
       pattern: "Hello",
     });
     expect(res.status).toBe(200);
@@ -254,7 +229,7 @@ describe("API", () => {
   });
 
   it("grep — search for nonexistent pattern", async () => {
-    const res = await req("POST", `/repos/test-team/${TEST_REPO}/tools/grep`, {
+    const res = await req("POST", `/collections/${TEST_USERNAME}/${TEST_COLLECTION}/tools/grep`, {
       pattern: "zzz_no_match_zzz",
     });
     expect(res.status).toBe(200);
@@ -263,7 +238,7 @@ describe("API", () => {
   });
 
   it("glob — find *.md files", async () => {
-    const res = await req("POST", `/repos/test-team/${TEST_REPO}/tools/glob`, {
+    const res = await req("POST", `/collections/${TEST_USERNAME}/${TEST_COLLECTION}/tools/glob`, {
       pattern: "*.md",
     });
     expect(res.status).toBe(200);
@@ -273,7 +248,7 @@ describe("API", () => {
   });
 
   it("glob — no results for *.xyz", async () => {
-    const res = await req("POST", `/repos/test-team/${TEST_REPO}/tools/glob`, {
+    const res = await req("POST", `/collections/${TEST_USERNAME}/${TEST_COLLECTION}/tools/glob`, {
       pattern: "*.xyz",
     });
     expect(res.status).toBe(200);
@@ -282,14 +257,14 @@ describe("API", () => {
   });
 
   it("log — get commit history", async () => {
-    const res = await req("POST", `/repos/test-team/${TEST_REPO}/tools/log`, {});
+    const res = await req("POST", `/collections/${TEST_USERNAME}/${TEST_COLLECTION}/tools/log`, {});
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.commits.length).toBeGreaterThanOrEqual(3);
   });
 
   it("diff — get diff of latest commit", async () => {
-    const res = await req("POST", `/repos/test-team/${TEST_REPO}/tools/diff`, {});
+    const res = await req("POST", `/collections/${TEST_USERNAME}/${TEST_COLLECTION}/tools/diff`, {});
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(typeof body.diff).toBe("string");
@@ -298,7 +273,7 @@ describe("API", () => {
   });
 
   it("blame — get blame for hello.md", async () => {
-    const res = await req("POST", `/repos/test-team/${TEST_REPO}/tools/blame`, {
+    const res = await req("POST", `/collections/${TEST_USERNAME}/${TEST_COLLECTION}/tools/blame`, {
       path: "hello.md",
     });
     expect(res.status).toBe(200);
@@ -309,7 +284,7 @@ describe("API", () => {
   });
 
   it("rm — delete notes.txt", async () => {
-    const res = await req("POST", `/repos/test-team/${TEST_REPO}/tools/rm`, {
+    const res = await req("POST", `/collections/${TEST_USERNAME}/${TEST_COLLECTION}/tools/rm`, {
       path: "notes.txt",
       message: "remove notes.txt",
     });
@@ -320,7 +295,7 @@ describe("API", () => {
   });
 
   it("ls — verify notes.txt is gone after rm", async () => {
-    const res = await req("POST", `/repos/test-team/${TEST_REPO}/tools/ls`, {});
+    const res = await req("POST", `/collections/${TEST_USERNAME}/${TEST_COLLECTION}/tools/ls`, {});
     expect(res.status).toBe(200);
     const body = await res.json();
     const names = body.entries.map((e: { name: string }) => e.name);
@@ -329,7 +304,7 @@ describe("API", () => {
   });
 
   it("rm — delete nonexistent file returns 404", async () => {
-    const res = await req("POST", `/repos/test-team/${TEST_REPO}/tools/rm`, {
+    const res = await req("POST", `/collections/${TEST_USERNAME}/${TEST_COLLECTION}/tools/rm`, {
       path: "nonexistent.txt",
     });
     expect(res.status).toBe(404);

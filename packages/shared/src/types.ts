@@ -61,20 +61,29 @@ export interface LsResponse {
   entries: LsEntry[];
 }
 
-// ---- Repo ----
-export interface CreateRepoRequest {
+// ---- Collection ----
+export interface CreateCollectionRequest {
   name: string;
   description?: string;
   visibility?: "private" | "public";
 }
 
-export interface RepoInfo {
+export interface CollectionInfo {
   id: string;
   name: string;
   owner: string;
   description: string;
   visibility: "private" | "public";
   created_at: string;
+}
+
+export interface SharedCollectionInfo extends CollectionInfo {
+  level: "read" | "edit";
+}
+
+export interface MyCollectionsResponse {
+  own: CollectionInfo[];
+  shared: SharedCollectionInfo[];
 }
 
 // ---- Rm ----

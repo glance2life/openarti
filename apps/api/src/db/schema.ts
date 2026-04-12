@@ -2,15 +2,16 @@ import { pgTable, text, timestamp, boolean, integer, index, pgEnum, uniqueIndex 
 
 // ---- Enums ----
 
-export const memberRoleEnum = pgEnum("member_role", ["owner", "member"]);
 export const visibilityEnum = pgEnum("visibility", ["private", "public"]);
-export const pinTargetTypeEnum = pgEnum("pin_target_type", ["repo", "file", "dir"]);
+export const pinTargetTypeEnum = pgEnum("pin_target_type", ["collection", "file", "dir"]);
+export const accessLevelEnum = pgEnum("access_level", ["read", "edit"]);
 
 // ---- better-auth managed tables ----
 
 export const users = pgTable("users", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
+  username: text("username").notNull().unique(),
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),
@@ -85,42 +86,38 @@ export const verifications = pgTable(
 
 // ---- App tables ----
 
-export const teams = pgTable("teams", {
-  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  name: text("name").notNull().unique(),
-  description: text("description").default(""),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const teamMembers = pgTable(
-  "team_members",
-  {
-    teamId: text("team_id")
-      .notNull()
-      .references(() => teams.id, { onDelete: "cascade" }),
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    role: memberRoleEnum("role").notNull().default("member"),
-  },
-  (t) => [uniqueIndex("team_members_unique").on(t.teamId, t.userId)]
-);
-
-export const repos = pgTable(
-  "repos",
+export const collections = pgTable(
+  "collections",
   {
     id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    teamId: text("team_id")
+    ownerId: text("owner_id")
       .notNull()
-      .references(() => teams.id, { onDelete: "cascade" }),
+      .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     description: text("description").default(""),
     visibility: visibilityEnum("visibility").notNull().default("private"),
     gitPath: text("git_path").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("repos_team_name").on(t.teamId, t.name)]
+  (t) => [uniqueIndex("collections_owner_name").on(t.ownerId, t.name)]
+);
+
+export const collectionAccess = pgTable(
+  "collection_access",
+  {
+    collectionId: text("collection_id")
+      .notNull()
+      .references(() => collections.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    level: accessLevelEnum("level").notNull().default("read"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("collection_access_unique").on(t.collectionId, t.userId),
+    index("collection_access_user_idx").on(t.userId),
+  ]
 );
 
 export const apiKeys = pgTable("api_keys", {
@@ -129,7 +126,11 @@ export const apiKeys = pgTable("api_keys", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   keyHash: text("key_hash").notNull().unique(),
+  keyHint: text("key_hint").default(""),
   label: text("label").default(""),
+  enabled: boolean("enabled").notNull().default(true),
+  usageCount: integer("usage_count").notNull().default(0),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
 });
@@ -153,16 +154,62 @@ export const pins = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    teamId: text("team_id")
-      .notNull()
-      .references(() => teams.id, { onDelete: "cascade" }),
     targetType: pinTargetTypeEnum("target_type").notNull(),
     targetPath: text("target_path").notNull(),
     displayOrder: integer("display_order").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    uniqueIndex("pins_user_team_path").on(t.userId, t.teamId, t.targetPath),
-    index("pins_user_team_idx").on(t.userId, t.teamId),
+    uniqueIndex("pins_user_path").on(t.userId, t.targetPath),
+    index("pins_user_idx").on(t.userId),
   ]
 );
+
+// ---- Invite links (for collection sharing) ----
+
+export const inviteLinks = pgTable(
+  "invite_links",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    token: text("token").notNull().unique().$defaultFn(() => crypto.randomUUID()),
+    collectionId: text("collection_id")
+      .notNull()
+      .references(() => collections.id, { onDelete: "cascade" }),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    enabled: boolean("enabled").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("invite_links_collection").on(t.collectionId),
+  ]
+);
+
+// ---- OAuth tables (for MCP) ----
+
+export const oauthClients = pgTable("oauth_clients", {
+  clientId: text("client_id").primaryKey(),
+  clientSecret: text("client_secret"),
+  clientName: text("client_name"),
+  redirectUris: text("redirect_uris").notNull(), // JSON array
+  grantTypes: text("grant_types"), // JSON array
+  responseTypes: text("response_types"), // JSON array
+  clientUri: text("client_uri"),
+  logoUri: text("logo_uri"),
+  scope: text("scope"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const oauthCodes = pgTable("oauth_codes", {
+  code: text("code").primaryKey(),
+  clientId: text("client_id").notNull(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  redirectUri: text("redirect_uri").notNull(),
+  codeChallenge: text("code_challenge").notNull(),
+  scope: text("scope"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  used: boolean("used").notNull().default(false),
+});

@@ -6,18 +6,18 @@ import type { ReadResponse } from "@openarti/shared";
 export function registerRead(program: Command) {
   program
     .command("read <path>")
-    .description("Read a file from a repo")
+    .description("Read a file from a collection")
     .option("--offset <n>", "Start line number", parseInt)
     .option("--limit <n>", "Number of lines to read", parseInt)
     .option("--ref <commit>", "Read a specific version")
     .action(async (pathArg: string, opts, cmd: Command) => {
       const ctx = getContext(cmd);
-      const { owner, repo, path: filePath } = parsePath(pathArg);
+      const { owner, collection, path: filePath } = parsePath(pathArg);
 
       const result = await apiRequest<ReadResponse>(
         ctx,
         "POST",
-        `/repos/${owner}/${repo}/tools/read`,
+        `/collections/${owner}/${collection}/tools/read`,
         {
           path: filePath,
           ...(opts.offset && { offset: opts.offset }),

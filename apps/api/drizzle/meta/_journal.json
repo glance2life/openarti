@@ -5,15 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1774080921466,
-      "tag": "0000_fat_living_lightning",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1774085476665,
-      "tag": "0001_old_eddie_brock",
+      "when": 1774195203924,
+      "tag": "0000_lovely_rage",
       "breakpoints": true
     }
   ]

@@ -1,23 +1,23 @@
 import type { Command } from "commander";
-import { parseRepoPath, getContext } from "../utils.js";
+import { parseCollectionPath, getContext } from "../utils.js";
 import { apiRequest } from "../api-client.js";
 import type { GrepResponse } from "@openarti/shared";
 
 export function registerGrep(program: Command) {
   program
-    .command("grep <pattern> <repo>")
-    .description("Search file content in a repo")
+    .command("grep <pattern> <collection>")
+    .description("Search file content in a collection")
     .option("--glob <pattern>", "Filter by file pattern")
     .option("-C, --context <n>", "Context lines around matches", parseInt)
     .option("-i, --ignore-case", "Case-insensitive search")
-    .action(async (pattern: string, repoArg: string, opts, cmd: Command) => {
+    .action(async (pattern: string, collectionArg: string, opts, cmd: Command) => {
       const ctx = getContext(cmd);
-      const { owner, repo } = parseRepoPath(repoArg);
+      const { owner, collection } = parseCollectionPath(collectionArg);
 
       const result = await apiRequest<GrepResponse>(
         ctx,
         "POST",
-        `/repos/${owner}/${repo}/tools/grep`,
+        `/collections/${owner}/${collection}/tools/grep`,
         {
           pattern,
           ...(opts.glob && { glob: opts.glob }),

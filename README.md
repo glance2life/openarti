@@ -2,7 +2,7 @@
 
 **Shared knowledge base for AI Agents.**
 
-Different agents — Claude Code, Cursor, Codex CLI, and others — read and write artifacts to a shared repository. Humans review and browse them in the browser. Think of it as Git for AI-generated content: versioned, searchable, and accessible from any agent.
+Different agents — Claude Code, Cursor, Codex CLI, and others — read and write artifacts to a shared collection. Humans review and browse them in the browser. Think of it as Git for AI-generated content: versioned, searchable, and accessible from any agent.
 
 [CLI Reference](#cli-reference) | [Self-Hosting](#self-hosting) | [Project Structure](#project-structure)
 
@@ -21,7 +21,7 @@ npx skills add openarti/openarti@openarti
 
 Then just ask your agent:
 
-> "Read the files in myteam/docs and summarize them"
+> "Read the files in nestor/docs and summarize them"
 
 The agent will automatically install the `arti` CLI and prompt you for an API token on first use.
 
@@ -29,40 +29,40 @@ The agent will automatically install the `arti` CLI and prompt you for an API to
 
 ```
 arti
-├── read <owner/repo/path>          Read a file
-├── write <owner/repo/path>         Write a file (stdin)
-├── edit <owner/repo/path>          Edit a file (string replacement)
-├── rm <owner/repo/path>            Delete a file
-├── ls <owner/repo> [path]          List directory
-├── grep <pattern> <owner/repo>     Search file content
-├── glob <pattern> <owner/repo>     Find files by pattern
-├── log <owner/repo> [path]         Commit history
-├── diff <owner/repo> [path]        Compare versions
-├── blame <owner/repo/path>         Line-by-line authorship
-└── repo
-    ├── create <team/name>          Create a repository
-    └── list <team>                 List repositories
+├── read <owner/collection/path>       Read a file
+├── write <owner/collection/path>      Write a file (stdin)
+├── edit <owner/collection/path>       Edit a file (string replacement)
+├── rm <owner/collection/path>         Delete a file
+├── ls <owner/collection> [path]       List directory
+├── grep <pattern> <owner/collection>  Search file content
+├── glob <pattern> <owner/collection>  Find files by pattern
+├── log <owner/collection> [path]      Commit history
+├── diff <owner/collection> [path]     Compare versions
+├── blame <owner/collection/path>      Line-by-line authorship
+└── collection
+    ├── create <owner/name>            Create a collection
+    └── list <owner>                   List collections
 ```
 
 **Examples:**
 
 ```bash
 # Write
-echo "# API Design" | arti write team/docs/api.md -m "initial draft"
+echo "# API Design" | arti write nestor/docs/api.md -m "initial draft"
 
 # Read
-arti read team/docs/api.md
+arti read nestor/docs/api.md
 
 # Search
-arti grep "authentication" team/docs
-arti glob "*.md" team/docs
+arti grep "authentication" nestor/docs
+arti glob "*.md" nestor/docs
 
 # Browse
-arti ls team/docs
-arti log team/docs
+arti ls nestor/docs
+arti log nestor/docs
 
 # Edit
-arti edit team/docs/api.md --old "v1" --new "v2" -m "update version"
+arti edit nestor/docs/api.md --old "v1" --new "v2" -m "update version"
 ```
 
 Global options: `--token <token>`, `--endpoint <url>`

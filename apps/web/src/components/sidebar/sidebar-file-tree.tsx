@@ -3,13 +3,10 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import {
-  ArrowLeft,
   ChevronRight,
-  Folder,
-  FileText,
-  Pin,
   Loader2,
 } from "lucide-react";
+import { FileIcon } from "@/lib/file-icon";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
@@ -25,13 +22,15 @@ interface TreeNodeState {
   expanded: boolean;
 }
 
+interface GlobFile {
+  path: string;
+}
+
 interface SidebarFileTreeProps {
-  team: string;
-  repo: string;
+  owner: string;
+  collection: string;
   currentPath: string;
-  isPinned: (path: string) => boolean;
-  onPin: (targetType: "repo" | "file" | "dir", targetPath: string) => void;
-  onUnpin: (targetPath: string) => void;
+  searchQuery?: string;
 }
 
 function sortEntries(entries: LsEntry[]) {
@@ -42,15 +41,37 @@ function sortEntries(entries: LsEntry[]) {
 }
 
 export function SidebarFileTree({
-  team,
-  repo,
+  owner,
+  collection,
   currentPath,
-  isPinned,
-  onPin,
-  onUnpin,
+  searchQuery = "",
 }: SidebarFileTreeProps) {
   const [tree, setTree] = useState<Record<string, TreeNodeState>>({});
   const [rootLoading, setRootLoading] = useState(true);
+  const [searchResults, setSearchResults] = useState<GlobFile[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+
+  // Debounced glob search
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    setSearchLoading(true);
+    const timer = setTimeout(() => {
+      fetch(`${API_URL}/collections/${owner}/${collection}/tools/glob`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pattern: `**/*${searchQuery.trim()}*` }),
+      })
+        .then((r) => (r.ok ? r.json() : { files: [] }))
+        .then((data) => setSearchResults(data.files ?? []))
+        .catch(() => setSearchResults([]))
+        .finally(() => setSearchLoading(false));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery, owner, collection]);
 
   const fetchDir = useCallback(
     async (dirPath: string) => {
@@ -61,7 +82,7 @@ export function SidebarFileTree({
 
       try {
         const res = await fetch(
-          `${API_URL}/repos/${team}/${repo}/tools/ls`,
+          `${API_URL}/collections/${owner}/${collection}/tools/ls`,
           {
             method: "POST",
             credentials: "include",
@@ -87,33 +108,35 @@ export function SidebarFileTree({
         }));
       }
     },
-    [team, repo]
+    [owner, collection]
   );
 
-  // Load root + auto-expand to current path
+  // Load root when collection changes
   useEffect(() => {
     setTree({});
     setRootLoading(true);
 
-    async function init() {
-      await fetchDir("");
-      setRootLoading(false);
+    fetchDir("").then(() => setRootLoading(false));
+  }, [owner, collection, fetchDir]);
 
-      // Auto-expand directories in the current path
-      if (currentPath) {
-        const parts = currentPath.split("/");
-        for (let i = 0; i < parts.length; i++) {
-          const dirPath = parts.slice(0, i + 1).join("/");
-          // Only expand intermediate directories, not the last segment if it's a file
-          if (i < parts.length - 1) {
-            await fetchDir(dirPath);
-          }
+  // Auto-expand directories to match current path (without resetting tree)
+  useEffect(() => {
+    if (!currentPath) return;
+
+    async function expandToPath() {
+      const parts = currentPath.split("/");
+      for (let i = 0; i < parts.length - 1; i++) {
+        const dirPath = parts.slice(0, i + 1).join("/");
+        // Only fetch if not already expanded
+        if (!tree[dirPath]?.expanded) {
+          await fetchDir(dirPath);
         }
       }
     }
 
-    init();
-  }, [team, repo, currentPath, fetchDir]);
+    expandToPath();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPath, fetchDir]);
 
   function toggleDir(dirPath: string) {
     const node = tree[dirPath];
@@ -137,10 +160,8 @@ export function SidebarFileTree({
       const entryPath = parentPath
         ? `${parentPath}/${entry.name}`
         : entry.name;
-      const fullPath = `${repo}/${entryPath}`;
-      const href = `/${team}/${repo}/${entryPath}`;
+      const href = `/${owner}/${collection}/${entryPath}`;
       const isActive = currentPath === entryPath;
-      const pinned = isPinned(fullPath);
 
       if (entry.type === "dir") {
         const node = tree[entryPath];
@@ -148,45 +169,29 @@ export function SidebarFileTree({
         const isLoading = node?.loading ?? false;
 
         return (
-          <div key={entryPath}>
-            <div className="group relative">
-              <button
-                onClick={() => toggleDir(entryPath)}
-                className={`flex w-full items-center gap-1 rounded-md py-1 pr-2 text-sm hover:bg-sidebar-accent ${
-                  isActive
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : ""
-                }`}
-                style={{ paddingLeft: depth * 12 + 8 }}
-              >
-                <ChevronRight
-                  className={`size-3.5 shrink-0 text-muted-foreground transition-transform ${
-                    isExpanded ? "rotate-90" : ""
-                  }`}
-                />
-                <Folder className="size-4 shrink-0 text-muted-foreground" />
-                <span className="truncate">{entry.name}</span>
-                {isLoading && (
-                  <Loader2 className="ml-auto size-3 animate-spin text-muted-foreground" />
-                )}
-              </button>
-              <button
-                onClick={() =>
-                  pinned ? onUnpin(fullPath) : onPin("dir", fullPath)
-                }
-                className={`absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 hover:bg-sidebar-accent ${
-                  pinned
-                    ? "text-foreground"
-                    : "text-muted-foreground opacity-0 group-hover:opacity-100"
-                }`}
-              >
-                <Pin
-                  className={`size-3 ${pinned ? "fill-current" : ""}`}
-                />
-              </button>
-            </div>
+          <div key={entryPath} className="flex flex-col gap-0.5">
+            <button
+              onClick={() => toggleDir(entryPath)}
+              className={`flex w-full items-center gap-1 rounded-md py-1 pr-2 hover:bg-sidebar-accent ${
+                isActive
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : ""
+              }`}
+              style={{ paddingLeft: depth * 12 + 8 }}
+            >
+              <ChevronRight
+                className={`size-3.5 shrink-0 transition-transform ${
+                  isExpanded ? "rotate-90" : ""
+                } ${isActive ? "" : "text-sidebar-foreground"}`}
+              />
+              <FileIcon filename={entry.name} isDirectory />
+              <span className="truncate">{entry.name}</span>
+              {isLoading && (
+                <Loader2 className="ml-auto size-3 animate-spin text-sidebar-foreground" />
+              )}
+            </button>
             {isExpanded && node?.entries && (
-              <div>{renderEntries(node.entries, entryPath, depth + 1)}</div>
+              <div className="flex flex-col gap-0.5">{renderEntries(node.entries, entryPath, depth + 1)}</div>
             )}
           </div>
         );
@@ -194,60 +199,65 @@ export function SidebarFileTree({
 
       // File
       return (
-        <div key={entryPath} className="group relative">
+        <div key={entryPath}>
           <Link
             href={href}
-            className={`flex items-center gap-1 rounded-md py-1 pr-2 text-sm hover:bg-sidebar-accent ${
+            className={`flex items-center gap-1 rounded-md py-1 pr-2 hover:bg-sidebar-accent ${
               isActive
                 ? "bg-sidebar-accent text-sidebar-accent-foreground"
                 : ""
             }`}
             style={{ paddingLeft: depth * 12 + 8 + 14 }}
           >
-            <FileText className="size-4 shrink-0 text-muted-foreground" />
+            <FileIcon filename={entry.name} />
             <span className="truncate">{entry.name}</span>
           </Link>
-          <button
-            onClick={() =>
-              pinned ? onUnpin(fullPath) : onPin("file", fullPath)
-            }
-            className={`absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 hover:bg-sidebar-accent ${
-              pinned
-                ? "text-foreground"
-                : "text-muted-foreground opacity-0 group-hover:opacity-100"
-            }`}
-          >
-            <Pin className={`size-3 ${pinned ? "fill-current" : ""}`} />
-          </button>
         </div>
       );
     });
   }
 
+  const isSearching = searchQuery.trim().length > 0;
+
   return (
     <div className="flex flex-col gap-0.5">
-      <div className="flex items-center justify-between px-2 py-1">
-        <span className="text-sm text-muted-foreground">{repo}</span>
-        <Link
-          href={`/${team}`}
-          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="size-3" />
-          Back
-        </Link>
-      </div>
-      {rootLoading ? (
+      {isSearching ? (
+        searchLoading ? (
+          <div className="space-y-1 px-2">
+            <Skeleton className="h-5 w-full" />
+            <Skeleton className="h-5 w-3/4" />
+          </div>
+        ) : searchResults.length === 0 ? (
+          <span className="px-2 py-1 text-xs text-muted-foreground">No files found</span>
+        ) : (
+          searchResults.map((file) => {
+            const href = `/${owner}/${collection}/${file.path}`;
+            const isActive = currentPath === file.path;
+            const searchFilename = file.path.split("/").pop() ?? file.path;
+            return (
+              <Link
+                key={file.path}
+                href={href}
+                className={`flex items-center gap-1.5 rounded-md px-2 py-1 hover:bg-sidebar-accent ${
+                  isActive
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : ""
+                }`}
+              >
+                <FileIcon filename={searchFilename} className="size-3.5 shrink-0" />
+                <span className="truncate">{file.path}</span>
+              </Link>
+            );
+          })
+        )
+      ) : rootLoading ? (
         <div className="space-y-1 px-2">
           <Skeleton className="h-5 w-full" />
           <Skeleton className="h-5 w-3/4" />
           <Skeleton className="h-5 w-5/6" />
           <Skeleton className="h-5 w-2/3" />
         </div>
-      ) : (tree[""]?.entries ?? []).length === 0 ? (
-        <p className="px-2 py-1 text-sm text-muted-foreground/60">
-          Empty
-        </p>
-      ) : (
+      ) : (tree[""]?.entries ?? []).length === 0 ? null : (
         renderEntries(tree[""]?.entries ?? [], "", 0)
       )}
     </div>

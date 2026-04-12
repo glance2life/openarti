@@ -3,32 +3,32 @@ import { resolveContext, type ResolvedContext } from "./api-client.js";
 
 export function parsePath(input: string): {
   owner: string;
-  repo: string;
+  collection: string;
   path: string;
 } {
   const parts = input.split("/");
   if (parts.length < 3) {
     throw new Error(
-      "Path must be in format: owner/repo/path (e.g. nestor/docs/hello.md)"
+      "Path must be in format: owner/collection/path (e.g. nestor/docs/hello.md)"
     );
   }
-  const [owner, repo, ...rest] = parts;
-  return { owner, repo, path: rest.join("/") };
+  const [owner, collection, ...rest] = parts;
+  return { owner, collection, path: rest.join("/") };
 }
 
-export function parseRepoPath(input: string): {
+export function parseCollectionPath(input: string): {
   owner: string;
-  repo: string;
+  collection: string;
   path?: string;
 } {
   const parts = input.split("/");
   if (parts.length < 2) {
     throw new Error(
-      "Path must be in format: owner/repo[/path] (e.g. nestor/docs)"
+      "Path must be in format: owner/collection[/path] (e.g. nestor/docs)"
     );
   }
-  const [owner, repo, ...rest] = parts;
-  return { owner, repo, path: rest.length > 0 ? rest.join("/") : undefined };
+  const [owner, collection, ...rest] = parts;
+  return { owner, collection, path: rest.length > 0 ? rest.join("/") : undefined };
 }
 
 export function getContext(cmd: Command): ResolvedContext {

@@ -1,21 +1,21 @@
 import type { Command } from "commander";
-import { parseRepoPath, getContext } from "../utils.js";
+import { parseCollectionPath, getContext } from "../utils.js";
 import { apiRequest } from "../api-client.js";
 import type { LsResponse } from "@openarti/shared";
 
 export function registerLs(program: Command) {
   program
-    .command("ls <repo> [path]")
-    .description("List files in a repo directory")
-    .action(async (repoArg: string, pathArg: string | undefined, cmd: Command) => {
+    .command("ls <collection> [path]")
+    .description("List files in a collection directory")
+    .action(async (collectionArg: string, pathArg: string | undefined, cmd: Command) => {
       const ctx = getContext(cmd);
-      const parsed = parseRepoPath(repoArg);
+      const parsed = parseCollectionPath(collectionArg);
       const dirPath = pathArg ?? parsed.path;
 
       const result = await apiRequest<LsResponse>(
         ctx,
         "POST",
-        `/repos/${parsed.owner}/${parsed.repo}/tools/ls`,
+        `/collections/${parsed.owner}/${parsed.collection}/tools/ls`,
         { ...(dirPath && { path: dirPath }) }
       );
 

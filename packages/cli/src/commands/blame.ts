@@ -9,12 +9,12 @@ export function registerBlame(program: Command) {
     .description("View line authorship")
     .action(async (pathArg: string, cmd: Command) => {
       const ctx = getContext(cmd);
-      const { owner, repo, path: filePath } = parsePath(pathArg);
+      const { owner, collection, path: filePath } = parsePath(pathArg);
 
       const result = await apiRequest<BlameResponse>(
         ctx,
         "POST",
-        `/repos/${owner}/${repo}/tools/blame`,
+        `/collections/${owner}/${collection}/tools/blame`,
         { path: filePath }
       );
 

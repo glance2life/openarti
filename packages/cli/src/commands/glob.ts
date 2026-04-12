@@ -1,20 +1,20 @@
 import type { Command } from "commander";
-import { parseRepoPath, getContext } from "../utils.js";
+import { parseCollectionPath, getContext } from "../utils.js";
 import { apiRequest } from "../api-client.js";
 import type { GlobResponse } from "@openarti/shared";
 
 export function registerGlob(program: Command) {
   program
-    .command("glob <pattern> <repo>")
+    .command("glob <pattern> <collection>")
     .description("Find files by glob pattern")
-    .action(async (pattern: string, repoArg: string, cmd: Command) => {
+    .action(async (pattern: string, collectionArg: string, cmd: Command) => {
       const ctx = getContext(cmd);
-      const { owner, repo } = parseRepoPath(repoArg);
+      const { owner, collection } = parseCollectionPath(collectionArg);
 
       const result = await apiRequest<GlobResponse>(
         ctx,
         "POST",
-        `/repos/${owner}/${repo}/tools/glob`,
+        `/collections/${owner}/${collection}/tools/glob`,
         { pattern }
       );
 

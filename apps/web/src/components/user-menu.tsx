@@ -11,9 +11,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useOpenDialog } from "@/hooks/use-dialog-router";
 import { LogOut, Settings } from "lucide-react";
 
 export function UserMenu({ user }: { user: { name: string; email: string } }) {
+  const openDialog = useOpenDialog();
+
   async function handleLogout() {
     await authClient.signOut({
       fetchOptions: {
@@ -24,7 +27,8 @@ export function UserMenu({ user }: { user: { name: string; email: string } }) {
     });
   }
 
-  const initial = user.name?.charAt(0)?.toUpperCase() || user.email.charAt(0).toUpperCase();
+  const initial =
+    user.name?.charAt(0)?.toUpperCase() || user.email.charAt(0).toUpperCase();
 
   return (
     <DropdownMenu>
@@ -47,7 +51,7 @@ export function UserMenu({ user }: { user: { name: string; email: string } }) {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem render={<a href="/settings" />}>
+        <DropdownMenuItem onClick={() => openDialog("settings")}>
           <Settings className="size-4" />
           Settings
         </DropdownMenuItem>

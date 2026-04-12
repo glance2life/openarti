@@ -29,7 +29,7 @@ components:
             message:
               type: string
 
-    Repo:
+    Collection:
       type: object
       properties:
         id:
@@ -64,21 +64,14 @@ paths:
                     type: string
                     example: ok
 
-  # ── Repo Management ──
+  # ── Collection Management ──
 
-  /repos/{team}:
+  /collections:
     post:
-      summary: Create repo
-      tags: [Repos]
+      summary: Create collection
+      tags: [Collections]
       security:
         - bearerAuth: []
-      parameters:
-        - name: team
-          in: path
-          required: true
-          schema:
-            type: string
-          example: nestor
       requestBody:
         required: true
         content:
@@ -89,70 +82,86 @@ paths:
               properties:
                 name:
                   type: string
-                  example: test-repo
+                  example: my-docs
                 description:
                   type: string
-                  example: A test repository
+                  example: A documentation collection
                 visibility:
                   type: string
                   enum: [private, public]
                   default: private
       responses:
         "201":
-          description: Repo created
+          description: Collection created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Repo"
+                $ref: "#/components/schemas/Collection"
 
     get:
-      summary: List repos for a team
-      tags: [Repos]
-      parameters:
-        - name: team
-          in: path
-          required: true
-          schema:
-            type: string
-          example: nestor
+      summary: List own collections
+      tags: [Collections]
+      security:
+        - bearerAuth: []
       responses:
         "200":
-          description: List of repos
+          description: List of collections
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/Repo"
+                  $ref: "#/components/schemas/Collection"
 
-  /repos/{team}/{repo}:
+  /collections/{owner}:
     get:
-      summary: Repo detail
-      tags: [Repos]
+      summary: List collections for an owner
+      tags: [Collections]
       parameters:
-        - name: team
+        - name: owner
           in: path
           required: true
           schema:
             type: string
           example: nestor
-        - name: repo
+      responses:
+        "200":
+          description: List of collections
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Collection"
+
+  /collections/{owner}/{collection}:
+    get:
+      summary: Collection detail
+      tags: [Collections]
+      parameters:
+        - name: owner
           in: path
           required: true
           schema:
             type: string
-          example: test-repo
+          example: nestor
+        - name: collection
+          in: path
+          required: true
+          schema:
+            type: string
+          example: my-docs
       responses:
         "200":
-          description: Repo detail
+          description: Collection detail
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Repo"
+                $ref: "#/components/schemas/Collection"
 
   # ── Tool API ──
 
-  /repos/{owner}/{repo}/tools/read:
+  /collections/{owner}/{collection}/tools/read:
     post:
       summary: Read file
       tags: [Tools]
@@ -162,13 +171,11 @@ paths:
           required: true
           schema:
             type: string
-          example: nestor
-        - name: repo
+        - name: collection
           in: path
           required: true
           schema:
             type: string
-          example: test-repo
       requestBody:
         required: true
         content:
@@ -182,13 +189,10 @@ paths:
                   example: hello.md
                 offset:
                   type: integer
-                  description: Start line number (1-based)
                 limit:
                   type: integer
-                  description: Number of lines to read
                 ref:
                   type: string
-                  description: Git commit hash for reading a historical version
       responses:
         "200":
           description: File content
@@ -206,7 +210,7 @@ paths:
                   commit:
                     type: string
 
-  /repos/{owner}/{repo}/tools/write:
+  /collections/{owner}/{collection}/tools/write:
     post:
       summary: Write file
       tags: [Tools]
@@ -218,13 +222,11 @@ paths:
           required: true
           schema:
             type: string
-          example: nestor
-        - name: repo
+        - name: collection
           in: path
           required: true
           schema:
             type: string
-          example: test-repo
       requestBody:
         required: true
         content:
@@ -235,13 +237,10 @@ paths:
               properties:
                 path:
                   type: string
-                  example: hello.md
                 content:
                   type: string
-                  example: "# Hello\n\nThis is a test artifact."
                 message:
                   type: string
-                  example: first commit
       responses:
         "200":
           description: Write result
@@ -257,7 +256,7 @@ paths:
                   created:
                     type: boolean
 
-  /repos/{owner}/{repo}/tools/edit:
+  /collections/{owner}/{collection}/tools/edit:
     post:
       summary: Edit file (string replacement)
       tags: [Tools]
@@ -269,13 +268,11 @@ paths:
           required: true
           schema:
             type: string
-          example: nestor
-        - name: repo
+        - name: collection
           in: path
           required: true
           schema:
             type: string
-          example: test-repo
       requestBody:
         required: true
         content:
@@ -286,19 +283,14 @@ paths:
               properties:
                 path:
                   type: string
-                  example: hello.md
                 old_string:
                   type: string
-                  example: "This is a test"
                 new_string:
                   type: string
-                  example: "This is an edited"
                 replace_all:
                   type: boolean
-                  default: false
                 edits:
                   type: array
-                  description: Batch edits (alternative to old_string/new_string)
                   items:
                     type: object
                     required: [old_string, new_string]
@@ -309,7 +301,6 @@ paths:
                         type: string
                 message:
                   type: string
-                  example: update content
       responses:
         "200":
           description: Edit result
@@ -325,7 +316,7 @@ paths:
                   replaced:
                     type: integer
 
-  /repos/{owner}/{repo}/tools/ls:
+  /collections/{owner}/{collection}/tools/ls:
     post:
       summary: List directory
       tags: [Tools]
@@ -335,13 +326,11 @@ paths:
           required: true
           schema:
             type: string
-          example: nestor
-        - name: repo
+        - name: collection
           in: path
           required: true
           schema:
             type: string
-          example: test-repo
       requestBody:
         required: true
         content:
@@ -351,29 +340,11 @@ paths:
               properties:
                 path:
                   type: string
-                  description: Directory path (default root)
       responses:
         "200":
           description: Directory listing
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  entries:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        name:
-                          type: string
-                        type:
-                          type: string
-                          enum: [file, dir]
-                        size:
-                          type: integer
 
-  /repos/{owner}/{repo}/tools/rm:
+  /collections/{owner}/{collection}/tools/rm:
     post:
       summary: Delete file
       tags: [Tools]
@@ -385,13 +356,11 @@ paths:
           required: true
           schema:
             type: string
-          example: nestor
-        - name: repo
+        - name: collection
           in: path
           required: true
           schema:
             type: string
-          example: test-repo
       requestBody:
         required: true
         content:
@@ -402,24 +371,13 @@ paths:
               properties:
                 path:
                   type: string
-                  example: old-doc.md
                 message:
                   type: string
-                  example: remove old doc
       responses:
         "200":
           description: Delete result
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  path:
-                    type: string
-                  commit:
-                    type: string
 
-  /repos/{owner}/{repo}/tools/grep:
+  /collections/{owner}/{collection}/tools/grep:
     post:
       summary: Search file content
       tags: [Tools]
@@ -429,13 +387,11 @@ paths:
           required: true
           schema:
             type: string
-          example: nestor
-        - name: repo
+        - name: collection
           in: path
           required: true
           schema:
             type: string
-          example: test-repo
       requestBody:
         required: true
         content:
@@ -446,46 +402,17 @@ paths:
               properties:
                 pattern:
                   type: string
-                  example: "TODO"
                 glob:
                   type: string
-                  description: Filter by file pattern
-                  example: "*.md"
                 context:
                   type: integer
-                  description: Context lines around matches
                 ignore_case:
                   type: boolean
       responses:
         "200":
           description: Search results
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  matches:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        path:
-                          type: string
-                        lines:
-                          type: array
-                          items:
-                            type: object
-                            properties:
-                              line:
-                                type: integer
-                              text:
-                                type: string
-                              match:
-                                type: boolean
-                  total_matches:
-                    type: integer
 
-  /repos/{owner}/{repo}/tools/glob:
+  /collections/{owner}/{collection}/tools/glob:
     post:
       summary: Find files by pattern
       tags: [Tools]
@@ -495,13 +422,11 @@ paths:
           required: true
           schema:
             type: string
-          example: nestor
-        - name: repo
+        - name: collection
           in: path
           required: true
           schema:
             type: string
-          example: test-repo
       requestBody:
         required: true
         content:
@@ -512,24 +437,11 @@ paths:
               properties:
                 pattern:
                   type: string
-                  example: "**/*.md"
       responses:
         "200":
           description: Matching files
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  files:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        path:
-                          type: string
 
-  /repos/{owner}/{repo}/tools/log:
+  /collections/{owner}/{collection}/tools/log:
     post:
       summary: View commit history
       tags: [Tools]
@@ -539,13 +451,11 @@ paths:
           required: true
           schema:
             type: string
-          example: nestor
-        - name: repo
+        - name: collection
           in: path
           required: true
           schema:
             type: string
-          example: test-repo
       requestBody:
         required: true
         content:
@@ -555,38 +465,13 @@ paths:
               properties:
                 path:
                   type: string
-                  description: Filter by file path
                 limit:
                   type: integer
-                  description: Max entries (default 20)
       responses:
         "200":
           description: Commit history
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  commits:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        hash:
-                          type: string
-                        message:
-                          type: string
-                        author:
-                          type: string
-                        timestamp:
-                          type: string
-                          format: date-time
-                        files:
-                          type: array
-                          items:
-                            type: string
 
-  /repos/{owner}/{repo}/tools/diff:
+  /collections/{owner}/{collection}/tools/diff:
     post:
       summary: Compare versions
       tags: [Tools]
@@ -596,13 +481,11 @@ paths:
           required: true
           schema:
             type: string
-          example: nestor
-        - name: repo
+        - name: collection
           in: path
           required: true
           schema:
             type: string
-          example: test-repo
       requestBody:
         required: true
         content:
@@ -612,34 +495,15 @@ paths:
               properties:
                 path:
                   type: string
-                  description: Filter by file path
                 from:
                   type: string
-                  description: Start commit hash
                 to:
                   type: string
-                  description: End commit hash (default latest)
       responses:
         "200":
           description: Diff result
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  path:
-                    type: string
-                  diff:
-                    type: string
-                  stats:
-                    type: object
-                    properties:
-                      additions:
-                        type: integer
-                      deletions:
-                        type: integer
 
-  /repos/{owner}/{repo}/tools/blame:
+  /collections/{owner}/{collection}/tools/blame:
     post:
       summary: View line authorship
       tags: [Tools]
@@ -649,13 +513,11 @@ paths:
           required: true
           schema:
             type: string
-          example: nestor
-        - name: repo
+        - name: collection
           in: path
           required: true
           schema:
             type: string
-          example: test-repo
       requestBody:
         required: true
         content:
@@ -666,30 +528,6 @@ paths:
               properties:
                 path:
                   type: string
-                  example: hello.md
       responses:
         "200":
           description: Blame result
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  path:
-                    type: string
-                  lines:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        line:
-                          type: integer
-                        text:
-                          type: string
-                        author:
-                          type: string
-                        commit:
-                          type: string
-                        timestamp:
-                          type: string
-                          format: date-time

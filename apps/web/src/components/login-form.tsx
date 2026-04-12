@@ -8,7 +8,13 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-export function LoginForm({ googleOAuth }: { googleOAuth: boolean }) {
+export function LoginForm({
+  googleOAuth,
+  redirectTo,
+}: {
+  googleOAuth: boolean;
+  redirectTo?: string;
+}) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -22,7 +28,7 @@ export function LoginForm({ googleOAuth }: { googleOAuth: boolean }) {
     const { error } = await authClient.signIn.email({
       email,
       password,
-      callbackURL: "/",
+      callbackURL: redirectTo || "/",
     });
 
     if (error) {
@@ -34,7 +40,7 @@ export function LoginForm({ googleOAuth }: { googleOAuth: boolean }) {
   async function handleGoogle() {
     await authClient.signIn.social({
       provider: "google",
-      callbackURL: "/",
+      callbackURL: redirectTo || "/",
     });
   }
 

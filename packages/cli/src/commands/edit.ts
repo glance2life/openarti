@@ -6,19 +6,19 @@ import type { EditResponse } from "@openarti/shared";
 export function registerEdit(program: Command) {
   program
     .command("edit <path>")
-    .description("Edit a file in a repo (string replacement)")
+    .description("Edit a file in a collection (string replacement)")
     .requiredOption("--old <string>", "String to find")
     .requiredOption("--new <string>", "Replacement string")
     .option("--replace-all", "Replace all occurrences")
     .option("-m, --message <msg>", "Commit message")
     .action(async (pathArg: string, opts, cmd: Command) => {
       const ctx = getContext(cmd);
-      const { owner, repo, path: filePath } = parsePath(pathArg);
+      const { owner, collection, path: filePath } = parsePath(pathArg);
 
       const result = await apiRequest<EditResponse>(
         ctx,
         "POST",
-        `/repos/${owner}/${repo}/tools/edit`,
+        `/collections/${owner}/${collection}/tools/edit`,
         {
           path: filePath,
           old_string: opts.old,

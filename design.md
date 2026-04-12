@@ -12,177 +12,161 @@ graph TB
         Skill["Skill<br/>(SKILL.md)"]
     end
 
-
     subgraph Server["API Server (Hono)"]
         subgraph Routes["Route Layer"]
             ToolAPI["Tool API<br/>read, write, edit<br/>grep, glob, ls<br/>log, diff, blame"]
-            MgmtAPI["Mgmt API<br/>team, repo, list"]
+            MgmtAPI["Mgmt API<br/>collection, user,<br/>access, api_key"]
+            MCPServer["MCP Server<br/>(SSE Transport)"]
         end
         subgraph Services["Service Layer"]
-            RepoService["RepoService"]
-            TeamService["TeamService"]
+            ArtiEngine["Arti Engine<br/>(StorageEngine)"]
+            CollectionService["CollectionService"]
             AuthService["AuthService"]
         end
     end
 
     subgraph Storage["Storage Layer"]
-        Git[("Git Storage<br/>(bare repos)<br/>───<br/>artifact content<br/>version history<br/>diff, blame")]
-        PG[("PostgreSQL<br/>───<br/>team, user, repo<br/>member, list<br/>api_key, permissions")]
+        FS[("File System<br/>(Weave CRDT)<br/>───<br/>artifact content<br/>version history<br/>diff, blame")]
+        PG[("PostgreSQL<br/>───<br/>user, collection<br/>access, api_key<br/>pin, invite_link")]
     end
 
-    Web -->|"HTTP / WS"| ToolAPI
+    Web -->|"HTTP"| ToolAPI
     Web -->|"HTTP"| MgmtAPI
     CLI -->|"HTTP"| ToolAPI
     Skill -.->|"via CLI"| CLI
+    MCPServer -->|"MCP"| ArtiEngine
 
-    ToolAPI --> RepoService
-    MgmtAPI --> TeamService
+    ToolAPI --> ArtiEngine
+    MgmtAPI --> CollectionService
 
-    RepoService --> Git
-    TeamService --> PG
+    ArtiEngine --> FS
+    CollectionService --> PG
     AuthService --> PG
-    RepoService --> PG
 ```
 
 ---
 
 ## 2. Key Design Decisions
 
-### 2.1 Git as Content Storage Engine
+### 2.1 Arti Engine — Weave CRDT Storage
 
-All artifact content is stored in **bare git repos**, not in the database.
+All artifact content is stored on the **local filesystem** using a custom **Weave CRDT** (ported from Manyana), not in the database and not in git.
 
-**Why:**
-- The spec requires commit, diff, blame, log, rollback — all native git capabilities, zero extra implementation
-- Every write = a git commit, version history is automatic
-- Blame is line-level, naturally supports multi-Agent collaboration tracing
-- Self-hosting only needs git + PostgreSQL, extremely low barrier
+**Why Weave CRDT over Git:**
+- Git is designed for human async collaboration; file-level locking breaks under agent concurrency
+- Weave is a line-level CRDT — concurrent writes to the same file merge automatically, no CAS retries
+- Merge is commutative and deterministic: `merge(A, B) == merge(B, A)`, always
+- No external binary dependency (no `git` on the host)
 
-**Git operations:** The server uses git plumbing commands (no libgit2 bindings), keeping things simple and reliable. Key operation mappings:
+**Architecture layers:**
 
-| Tool API | Git Operation |
-|----------|---------|
-| `read` | `git show HEAD:<path>` |
-| `write` | `hash-object` → `read-tree` → `update-index` → `write-tree` → `commit-tree` → `update-ref` |
-| `edit` | read → string replace → same as write flow |
-| `grep` | `git grep` |
-| `glob` | `git ls-tree` + pattern match |
-| `ls` | `git ls-tree` |
-| `log` | `git log` |
-| `diff` | `git diff` |
-| `blame` | `git blame` |
+| Layer | Responsibility |
+|-------|---------------|
+| `StorageEngine` interface | 12-method abstraction (read, write, edit, rm, ls, grep, glob, log, diff, blame, fileExists, init) |
+| `ArtiEngine` | Implements StorageEngine using Weave + CollectionFS |
+| `CollectionFS` / `LocalFS` | Pure I/O abstraction (readFile, writeFile, readdir, glob, lock) |
+| Weave module | Pure functions — `initialState`, `updateState`, `mergeStates`, `serialize`, `deserialize` |
 
-**Concurrent write strategy:** Optimistic concurrency + CAS (compare-and-swap), no locks.
+**Write flow:**
 
 ```mermaid
 flowchart TD
-    A["Read current HEAD commit hash<br/>(record as old_head)"] --> B["git hash-object -w<br/>write blob"]
-    B --> C["read-tree + update-index + write-tree<br/>build new tree"]
-    C --> D["git commit-tree<br/>create new commit (parent = old_head)"]
-    D --> E["git update-ref HEAD new_commit old_head<br/>atomic CAS"]
-    E -->|"old_head unchanged → success"| F["Return commit hash"]
-    E -->|"old_head changed → CAS failed"| A
+    A["writeFile(path, content)"] --> B["Check weave exists"]
+    B --> C["Lock weave file"]
+    C --> D{"Weave exists?"}
+    D -->|"No"| E["initialState(lines)"]
+    D -->|"Yes"| F["Read old weave state<br/>updateState(old, newLines)"]
+    E --> G["Write weave + file + commit"]
+    F --> G
+    G --> H["Release lock"]
+    H --> I["Return { commit, created }"]
 ```
 
-Concurrency scenarios:
+**Concurrent write strategy:** Per-file locking via weave files. Each file has its own lock, so writes to different files are fully parallel. Writes to the same file are serialized at the weave level — no conflicts, no retries.
 
-| Scenario | Result |
-|------|------|
-| Concurrent writes to **different files** | CAS-failed side retries, rebuilds tree from new HEAD → both writes preserved |
-| Concurrent edits to **same file, different locations** | Retry applies string replace on new content → both edits preserved |
-| Concurrent edits to **same file, same location** | Retry finds old_string no longer matches → returns 409 conflict |
-
-No file locks or mutexes anywhere. `update-ref` atomicity guarantees correctness. Write conflicts are rare (agents rarely edit the same line simultaneously), and when they do occur, the error semantics are clear.
+**Commit model:** Lightweight JSON commits stored in `.arti/commits/{id}.json` with a linked-list chain via `parent` pointer. HEAD stored in `.arti/refs/HEAD`.
 
 **Filesystem layout:**
 
 ```
 /data/repos/
-  {team_name}/
-    {repo_name}.git/     ← bare git repo
+  {username}/
+    {collection_name}.git/
+      .arti/
+        weaves/{path}.weave   ← Weave CRDT state per file
+        commits/{id}.json     ← Commit chain
+        refs/HEAD             ← Current commit pointer
+      {user files}            ← Actual file content
 ```
 
 ### 2.2 PostgreSQL for Metadata
 
-Git handles content only. Team, User, Repo metadata, API keys, and permission relationships are stored in PostgreSQL.
+Arti Engine handles content only. User, Collection metadata, API keys, access control, and pins are stored in PostgreSQL. Auth is managed by **better-auth** (users, sessions, accounts, verifications).
 
 ```mermaid
 erDiagram
     users {
-        uuid id PK
-        string email UK
-        string name
-        string avatar_url
-        datetime created_at
+        text id PK
+        text name
+        text username UK
+        text email UK
+        boolean email_verified
+        text image
+        timestamp created_at
+        timestamp updated_at
     }
 
-    teams {
-        uuid id PK
-        string name UK
-        string description
-        datetime created_at
-        datetime updated_at
-    }
-
-    team_members {
-        uuid team_id FK
-        uuid user_id FK
-        enum role "owner | member"
-    }
-
-    repos {
-        uuid id PK
-        uuid team_id FK
-        string name
-        string description
+    collections {
+        text id PK
+        text owner_id FK
+        text name
+        text description
         enum visibility "private | public"
-        string git_path
-        datetime created_at
+        text git_path
+        timestamp created_at
+    }
+
+    collection_access {
+        text collection_id FK
+        text user_id FK
+        enum level "read | edit"
+        timestamp created_at
     }
 
     api_keys {
-        uuid id PK
-        uuid user_id FK
-        string key_hash
-        datetime created_at
-        datetime last_used_at
+        text id PK
+        text user_id FK
+        text key_hash
+        text label
+        timestamp expires_at
+        timestamp created_at
     }
 
-    lists {
-        uuid id PK
-        uuid team_id FK
-        string name
-        string description
+    pins {
+        text id PK
+        text user_id FK
+        text collection_id FK
+        enum target_type "collection | file | dir"
+        text target_path
+        int sort_order
+        timestamp created_at
     }
 
-    list_repos {
-        uuid list_id FK
-        string repo_ref "team/repo"
+    invite_links {
+        text id PK
+        text collection_id FK
+        text created_by FK
+        boolean enabled
+        timestamp created_at
     }
 
-    comments {
-        uuid id PK
-        uuid repo_id FK
-        string path
-        int start_line
-        int end_line
-        string context "anchor text snapshot"
-        string body
-        uuid author_id FK
-        boolean resolved
-        boolean orphaned "anchor invalidated"
-        datetime created_at
-        datetime updated_at
-    }
-
-    users ||--o{ team_members : "belongs to"
-    teams ||--o{ team_members : "has"
-    teams ||--o{ repos : "owns"
+    users ||--o{ collections : "owns"
+    users ||--o{ collection_access : "has access"
+    collections ||--o{ collection_access : "shared with"
     users ||--o{ api_keys : "has"
-    teams ||--o{ lists : "owns"
-    lists ||--o{ list_repos : "contains"
-    repos ||--o{ comments : "has"
-    users ||--o{ comments : "authors"
+    users ||--o{ pins : "pins"
+    collections ||--o{ pins : "pinned in"
+    collections ||--o{ invite_links : "has"
 ```
 
 ### 2.3 Hono as API Framework
@@ -233,24 +217,26 @@ openarti/
       src/
         routes/
           tools.ts          ← Tool API (read, write, edit, grep...)
-          repos.ts          ← Repo management API
+          collections.ts    ← Collection management API
         services/
-          git.ts            ← Git operations wrapper
-          repo.ts
+          storage.ts        ← StorageEngine interface
+          arti/
+            engine.ts       ← ArtiEngine (StorageEngine impl)
+            weave.ts        ← Weave CRDT (pure functions)
+            collection-fs.ts ← CollectionFS / LocalFS
+          collection.ts     ← Collection resolution & access check
+          template.ts       ← Getting-started template
+        mcp/
+          server.ts         ← MCP server (all tools via StorageEngine)
         middleware/
-          auth.ts           ← API Key / Session auth
+          auth.ts           ← API Key / Session auth (better-auth)
         db/
           schema.ts         ← Drizzle schema
-          migrations/
     web/                    ← Web frontend (Next.js)
       src/
-        app/                ← App Router pages
-          [team]/
-            page.tsx        ← Team home
-            [repo]/
-              page.tsx      ← Repo home (file list)
-              [...path]/
-                page.tsx    ← Artifact render page
+        app/
+          (auth)/           ← Login pages
+          (dashboard)/      ← Dashboard, settings, collection browser
         components/
           renderers/        ← Rendering engine
             markdown.tsx
@@ -288,17 +274,17 @@ sequenceDiagram
     participant S as Skill Prompt
     participant CLI as arti CLI
     participant API as API Server
-    participant Git as Git Storage
+    participant Arti as Arti Engine
 
     A->>S: Need to write an artifact
     S->>A: Guide to call arti write
-    A->>CLI: echo "content" | arti write nestor/feature-x/spec.md -m "..."
-    CLI->>API: POST /repos/nestor/feature-x/tools/write
+    A->>CLI: echo "content" | arti write nestor/docs/spec.md -m "..."
+    CLI->>API: POST /collections/nestor/docs/tools/write
     API->>API: Auth middleware validates API token
-    API->>API: Permissions middleware checks team membership
-    API->>Git: hash-object → write-tree → commit-tree → update-ref
-    Git-->>API: commit hash
-    API-->>API: Publish file.created event
+    API->>API: Check collection access
+    API->>Arti: engine.writeFile(path, content)
+    Note over Arti: lock weave → update CRDT → write file + commit → unlock
+    Arti-->>API: { commit, created }
     API-->>CLI: { path, commit, created }
     CLI-->>A: Plain text result
 ```
@@ -310,28 +296,25 @@ sequenceDiagram
     participant B as Browser
     participant Next as Next.js SSR
     participant API as API Server
-    participant WS as WebSocket
 
-    B->>Next: GET /nestor/feature-x/spec.md
-    Next->>API: POST /tools/read { path: "spec.md" }
+    B->>Next: GET /nestor/docs/spec.md
+    Next->>API: POST /collections/nestor/docs/tools/read
     API-->>Next: File content
     Next->>Next: Select Markdown renderer based on .md extension
     Next-->>B: Server-rendered HTML
     B->>B: Client-side hydrate
-    B->>WS: Subscribe to repo changes
-    Note over WS,B: Content updates push automatically → re-render
 ```
 
 ### 4.3 Edit Operation (Precise Replacement)
 
 ```mermaid
 flowchart TD
-    A["POST /tools/edit<br/>old_string + new_string"] --> B["git show HEAD:spec.md<br/>get full file content"]
+    A["POST /tools/edit<br/>old_string + new_string"] --> B["Read current file content"]
     B --> C{"old_string<br/>occurrences?"}
     C -->|"0"| D["404 error<br/>old_string not found"]
     C -->|">1 without replace_all"| E["409 error<br/>report match count"]
     C -->|"1, or replace_all set"| F["Execute string replacement"]
-    F --> G["Write file → git commit"]
+    F --> G["Update weave CRDT → write file + commit"]
     G --> H["Return { path, commit, replaced }"]
 ```
 
@@ -358,10 +341,10 @@ flowchart TB
 ```
 
 **Permission rules are simple:**
-- Public repo: read operations require no auth
-- Private repo: must be a team member
-- Write operations: must be a team member
-- Admin operations (delete repo, manage members): must be team owner
+- Public collection: read operations require no auth
+- Private collection: must be owner or have explicit access
+- Write operations: must be owner or have "edit" access level
+- Admin operations (delete collection, manage access): must be owner
 
 ---
 
@@ -374,7 +357,7 @@ flowchart TB
 | Web Framework | Next.js (App Router) | SSR + React rendering ecosystem |
 | Database | PostgreSQL | Metadata storage, mature and reliable |
 | ORM | Drizzle | Lightweight, type-safe, good migrations |
-| Content Storage | Bare Git Repos | Version operations with zero extra implementation |
+| Content Storage | Arti Engine (Weave CRDT) | Line-level CRDT, agent-native concurrency, no git dependency |
 | CLI | TypeScript + Commander.js | Shares types with the project |
 | Real-time | WebSocket | Simple and direct |
 | Auth | API Token + OAuth (Web) | Agents use tokens, humans use OAuth |
@@ -397,24 +380,24 @@ graph TB
         API["API Server<br/>(Hono + Node)"]
         Web["Web App<br/>(Next.js)"]
         PG[("PostgreSQL")]
-        Git[("Git Repos<br/>/data/repos")]
+        FS[("File System<br/>/data/repos")]
     end
 
     User(("User / Agent")) --> LB
     LB --> API
     LB --> Web
     API --> PG
-    API --> Git
+    API --> FS
     Web -->|"Internal call"| API
 ```
 
-Start with: `docker compose up`. Three containers (API, Web, PostgreSQL), Git repos on a host-mounted volume. Real-time push uses in-memory EventEmitter — no Redis needed.
+Start with: `docker compose up`. Three containers (API, Web, PostgreSQL), collection data on a host-mounted volume.
 
 ### 7.2 Cloud (Multi-Instance)
 
-The core challenge with multiple instances: Git repos live on disk, multiple API instances can't each hold a copy.
+The core challenge with multiple instances: collection data lives on disk, multiple API instances can't each hold a copy.
 
-Solution: extract a standalone **Git Storage Service**, making API instances stateless.
+Solution: migrate `CollectionFS` implementation from `LocalFS` (POSIX) to a shared backend (e.g. S3 + PostgreSQL). The `StorageEngine` interface stays the same — only the I/O layer changes.
 
 ```mermaid
 graph TB
@@ -428,71 +411,44 @@ graph TB
         API3["API Instance N..."]
     end
 
-    subgraph GitService["Git Storage Service"]
-        GW1["Git Worker 1<br/>/data/repos/a-m"]
-        GW2["Git Worker 2<br/>/data/repos/n-z"]
-    end
-
-    Redis[("Redis<br/>pub/sub + routing table")]
-    PG[("Managed PostgreSQL")]
+    S3[("S3<br/>weave + file content")]
+    PG[("Managed PostgreSQL<br/>metadata + commits")]
     Web["Web App<br/>(Vercel)"]
 
     User(("User / Agent")) --> CDN
     CDN --> API1 & API2 & API3
     CDN --> Web
-    API1 & API2 & API3 -->|"gRPC"| GW1 & GW2
+    API1 & API2 & API3 --> S3
     API1 & API2 & API3 --> PG
-    API1 & API2 & API3 --> Redis
-    GW1 & GW2 --> Redis
 ```
 
-**Layer responsibilities:**
-
-| Layer | Responsibility | Scaling |
-|---|---|---|
-| API Instances | Auth, permissions, request routing | Stateless, add instances horizontally |
-| Git Workers | Hold bare repos, execute git operations | Sharded by team/repo |
-| Redis | WebSocket event broadcast + Git Worker routing table | Single instance or cluster |
-| PostgreSQL | Metadata | Managed, read-write splitting |
-
-**API → Git Worker routing:** API receives a request, checks Redis routing table (team/repo → worker address), forwards git operations to the appropriate worker. New repos are assigned to workers by load and written to the routing table.
-
-**Git Worker sharding strategy:** Sharded by team (all repos in a team on the same worker) for simplicity. Can later migrate hot data at per-repo granularity.
-
-### 7.3 Comparison
-
-| | Self-Hosting | Cloud |
-|---|---|---|
-| API | Single instance Node | Multi-instance stateless |
-| Git Storage | Local disk, API operates directly | Git Storage Service, API calls via gRPC |
-| Real-time Push | In-memory EventEmitter | Redis pub/sub |
-| Database | Docker PostgreSQL | Managed PostgreSQL |
-| Web | Same Docker Compose | Vercel / standalone deployment |
-| CDN | None | Cloudflare |
-
-**Code-level abstraction:** The API operates repos through a unified `GitService` interface. Self-hosting implements it as local git calls; Cloud implements it as a gRPC client. One codebase, two deployment modes.
+**Code-level abstraction:** The API operates collections through a unified `StorageEngine` interface. `ArtiEngine` delegates I/O to `CollectionFS`. Self-hosting uses `LocalFS` (POSIX); Cloud uses an S3-backed implementation. One codebase, two deployment modes.
 
 ```typescript
-interface GitService {
-  read(repo: string, path: string, opts?: ReadOpts): Promise<FileContent>
-  write(repo: string, path: string, content: string, opts?: WriteOpts): Promise<Commit>
-  edit(repo: string, path: string, edits: EditOp[], opts?: EditOpts): Promise<Commit>
-  grep(repo: string, pattern: string, opts?: GrepOpts): Promise<GrepResult>
+interface StorageEngine {
+  readFile(collectionPath: string, filePath: string, opts?: ReadOpts): Promise<FileContent>
+  writeFile(collectionPath: string, filePath: string, content: string, opts?: WriteOpts): Promise<Commit>
+  editFile(collectionPath: string, filePath: string, edits: EditOp[], opts?: EditOpts): Promise<Commit>
+  // ... 12 methods total
+}
+
+// CollectionFS — swappable I/O layer
+interface CollectionFS {
+  readFile(path: string): Promise<string>
+  writeFile(path: string, content: string): Promise<void>
+  readdir(path: string): Promise<DirEntry[]>
+  exists(path: string): Promise<boolean>
+  glob(pattern: string): Promise<string[]>
+  lock(path: string): Promise<() => Promise<void>>
   // ...
 }
 
-// Self-hosting: direct git CLI calls
-class LocalGitService implements GitService { ... }
+// Self-hosting
+class LocalFS implements CollectionFS { ... }
 
-// Cloud: gRPC calls to Git Worker
-class RemoteGitService implements GitService { ... }
+// Cloud
+class S3FS implements CollectionFS { ... }
 ```
-
-Cloud-specific features (future iterations):
-- Analytics dashboard, audit logs
-- SSO / SAML
-- Automatic backups
-- SLA + support
 
 ---
 
@@ -533,29 +489,30 @@ All Renderers support switching to source mode (raw text + syntax highlighting).
 
 Goal: an Agent can read/write artifacts via the Skill, and the browser can render them.
 
-- [x] API: Tool API (read, write, edit, rm, grep, glob, ls, log, diff, blame) + Git storage layer
-- [x] API: Basic auth (API Key)
+- [x] API: Tool API (read, write, edit, rm, grep, glob, ls, log, diff, blame) + Arti Engine (Weave CRDT)
+- [x] API: Auth (API Key + better-auth sessions)
+- [x] API: Collection management, access control, invite links
+- [x] API: MCP server (SSE transport)
 - [x] CLI: All commands
-- [x] Web: Artifact rendering (Markdown, code)
+- [x] Web: Artifact rendering (Markdown, code, CSV, JSON, YAML, TOML, Mermaid, PlantUML, SVG, HTML, LaTeX)
 - [x] Skill: SKILL.md
 - [x] Docker Compose self-hosting
 
 ### Phase 2 — Full Features
 
-- [ ] API: Management API (team, repo, list)
 - [ ] API: Comment system (region anchoring + Agent reads via `read`)
-- [ ] Web: All renderers, version history, source/preview toggle
+- [ ] Web: Version history, source/preview toggle
 - [ ] Web: Comment interaction + reference copy (with location info)
 - [ ] Real-time updates (WebSocket)
-- [ ] OAuth login
 
 ### Phase 3 — Collaboration & Polish
 
-- [ ] List (cross-team aggregation)
-- [ ] Public repo search and discovery
+- [ ] Public collection search and discovery
+- [ ] Weave merge for multi-device sync
 
 ### Phase 4 — Cloud
 
+- [ ] S3-backed CollectionFS
 - [ ] Edge deployment
 - [ ] CDN + global acceleration
 - [ ] Analytics dashboard

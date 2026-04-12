@@ -24,8 +24,13 @@ async function getAuthConfig() {
   }
 }
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ redirect?: string }>;
+}) {
   const config = await getAuthConfig();
+  const { redirect: redirectTo } = await searchParams;
 
   return (
     <Card className="w-full max-w-sm">
@@ -36,7 +41,7 @@ export default async function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <LoginForm googleOAuth={config.googleOAuth} />
+          <LoginForm googleOAuth={config.googleOAuth} redirectTo={redirectTo} />
         </CardContent>
         {config.allowRegistration && (
           <CardFooter className="justify-center">

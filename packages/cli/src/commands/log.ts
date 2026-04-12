@@ -1,22 +1,22 @@
 import type { Command } from "commander";
-import { parseRepoPath, getContext } from "../utils.js";
+import { parseCollectionPath, getContext } from "../utils.js";
 import { apiRequest } from "../api-client.js";
 import type { LogResponse } from "@openarti/shared";
 
 export function registerLog(program: Command) {
   program
-    .command("log <repo> [path]")
+    .command("log <collection> [path]")
     .description("View commit history")
     .option("--limit <n>", "Max entries", parseInt)
-    .action(async (repoArg: string, pathArg: string | undefined, opts, cmd: Command) => {
+    .action(async (collectionArg: string, pathArg: string | undefined, opts, cmd: Command) => {
       const ctx = getContext(cmd);
-      const parsed = parseRepoPath(repoArg);
+      const parsed = parseCollectionPath(collectionArg);
       const filePath = pathArg ?? parsed.path;
 
       const result = await apiRequest<LogResponse>(
         ctx,
         "POST",
-        `/repos/${parsed.owner}/${parsed.repo}/tools/log`,
+        `/collections/${parsed.owner}/${parsed.collection}/tools/log`,
         {
           ...(filePath && { path: filePath }),
           ...(opts.limit && { limit: opts.limit }),

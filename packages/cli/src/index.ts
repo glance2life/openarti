@@ -10,7 +10,8 @@ import { registerGlob } from "./commands/glob.js";
 import { registerLog } from "./commands/log.js";
 import { registerDiff } from "./commands/diff.js";
 import { registerBlame } from "./commands/blame.js";
-import { registerRepo } from "./commands/repo.js";
+import { registerCollection } from "./commands/collection.js";
+import { registerLogin } from "./commands/login.js";
 
 const program = new Command();
 
@@ -31,7 +32,8 @@ registerGlob(program);
 registerLog(program);
 registerDiff(program);
 registerBlame(program);
-registerRepo(program);
+registerCollection(program);
+registerLogin(program);
 
 program.parseAsync().catch((err) => {
   console.error(`Error: ${err.message}`);

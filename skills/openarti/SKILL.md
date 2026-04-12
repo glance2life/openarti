@@ -1,6 +1,6 @@
 ---
 name: openarti
-description: Interact with OpenArti repositories using the arti CLI. Use when the user references OpenArti, the arti CLI, or resources at openarti.dev — for example reading, writing, searching, or browsing files in an OpenArti repo.
+description: Interact with OpenArti collections using the arti CLI. Use when the user references OpenArti, the arti CLI, or resources at openarti.dev — for example reading, writing, searching, or browsing files in an OpenArti collection.
 ---
 
 # OpenArti
@@ -21,19 +21,19 @@ Once setup is confirmed, proceed with the requested operation. Do not repeat the
 
 ```
 arti
-├── read <owner/repo/path>          Read a file
-├── write <owner/repo/path>         Write a file (stdin)
-├── edit <owner/repo/path>          Edit a file (string replacement)
-├── rm <owner/repo/path>            Delete a file
-├── ls <owner/repo> [path]          List directory
-├── grep <pattern> <owner/repo>     Search file content
-├── glob <pattern> <owner/repo>     Find files by pattern
-├── log <owner/repo> [path]         Commit history
-├── diff <owner/repo> [path]        Compare versions
-├── blame <owner/repo/path>         Line-by-line authorship
-└── repo
-    ├── create <team/name>          Create a repository
-    └── list <team>                 List repositories
+├── read <owner/collection/path>          Read a file
+├── write <owner/collection/path>         Write a file (stdin)
+├── edit <owner/collection/path>          Edit a file (string replacement)
+├── rm <owner/collection/path>            Delete a file
+├── ls <owner/collection> [path]          List directory
+├── grep <pattern> <owner/collection>     Search file content
+├── glob <pattern> <owner/collection>     Find files by pattern
+├── log <owner/collection> [path]         Commit history
+├── diff <owner/collection> [path]        Compare versions
+├── blame <owner/collection/path>         Line-by-line authorship
+└── collection
+    ├── create <owner/name>               Create a collection
+    └── list <owner>                      List collections
 ```
 
 Global options: `--token <token>`, `--endpoint <url>`
@@ -42,12 +42,12 @@ Global options: `--token <token>`, `--endpoint <url>`
 
 ### read
 
-Read file content from a repository.
+Read file content from a collection.
 
 ```bash
-arti read owner/repo/path/to/file.md
-arti read owner/repo/file.md --offset 10 --limit 50
-arti read owner/repo/file.md --ref abc1234
+arti read owner/collection/path/to/file.md
+arti read owner/collection/file.md --offset 10 --limit 50
+arti read owner/collection/file.md --ref abc1234
 ```
 
 Options: `--offset <n>` start line, `--limit <n>` line count, `--ref <commit>` specific version.
@@ -57,8 +57,8 @@ Options: `--offset <n>` start line, `--limit <n>` line count, `--ref <commit>` s
 Write a file. Content is read from stdin.
 
 ```bash
-echo "# Hello" | arti write owner/repo/README.md -m "init readme"
-cat draft.md | arti write owner/repo/docs/guide.md -m "add guide"
+echo "# Hello" | arti write owner/collection/README.md -m "init readme"
+cat draft.md | arti write owner/collection/docs/guide.md -m "add guide"
 ```
 
 Options: `-m, --message <msg>` commit message.
@@ -68,18 +68,18 @@ Options: `-m, --message <msg>` commit message.
 Edit a file by replacing a string.
 
 ```bash
-arti edit owner/repo/config.json --old '"debug": false' --new '"debug": true' -m "enable debug"
-arti edit owner/repo/main.py --old old_func --new new_func --replace-all -m "rename function"
+arti edit owner/collection/config.json --old '"debug": false' --new '"debug": true' -m "enable debug"
+arti edit owner/collection/main.py --old old_func --new new_func --replace-all -m "rename function"
 ```
 
 Options: `--old <string>` (required), `--new <string>` (required), `--replace-all`, `-m, --message <msg>`.
 
 ### rm
 
-Delete a file from a repository.
+Delete a file from a collection.
 
 ```bash
-arti rm owner/repo/obsolete.md -m "remove obsolete doc"
+arti rm owner/collection/obsolete.md -m "remove obsolete doc"
 ```
 
 Options: `-m, --message <msg>` commit message.
@@ -89,8 +89,8 @@ Options: `-m, --message <msg>` commit message.
 List files and directories. Directories have a trailing `/`.
 
 ```bash
-arti ls owner/repo
-arti ls owner/repo src/lib
+arti ls owner/collection
+arti ls owner/collection src/lib
 ```
 
 ### grep
@@ -98,9 +98,9 @@ arti ls owner/repo src/lib
 Search file content. Output format: `file:line:text`.
 
 ```bash
-arti grep "TODO" owner/repo
-arti grep "error" owner/repo --glob "*.log" -i
-arti grep "pattern" owner/repo -C 3
+arti grep "TODO" owner/collection
+arti grep "error" owner/collection --glob "*.log" -i
+arti grep "pattern" owner/collection -C 3
 ```
 
 Options: `--glob <pattern>` filter files, `-i, --ignore-case`, `-C, --context <n>` context lines.
@@ -110,8 +110,8 @@ Options: `--glob <pattern>` filter files, `-i, --ignore-case`, `-C, --context <n
 Find files matching a glob pattern.
 
 ```bash
-arti glob "*.md" owner/repo
-arti glob "src/**/*.ts" owner/repo
+arti glob "*.md" owner/collection
+arti glob "src/**/*.ts" owner/collection
 ```
 
 ### log
@@ -119,8 +119,8 @@ arti glob "src/**/*.ts" owner/repo
 View commit history.
 
 ```bash
-arti log owner/repo
-arti log owner/repo README.md --limit 5
+arti log owner/collection
+arti log owner/collection README.md --limit 5
 ```
 
 Output format: `hash date author  message`
@@ -132,8 +132,8 @@ Options: `--limit <n>` max commits.
 Compare versions. Outputs unified diff with stats.
 
 ```bash
-arti diff owner/repo
-arti diff owner/repo src/index.ts --from abc1234 --to def5678
+arti diff owner/collection
+arti diff owner/collection src/index.ts --from abc1234 --to def5678
 ```
 
 Options: `--from <commit>`, `--to <commit>`.
@@ -143,26 +143,26 @@ Options: `--from <commit>`, `--to <commit>`.
 Show line-by-line authorship.
 
 ```bash
-arti blame owner/repo/src/main.ts
+arti blame owner/collection/src/main.ts
 ```
 
 Output format: `hash (author date) line| text`
 
-### repo create
+### collection create
 
-Create a new repository.
+Create a new collection.
 
 ```bash
-arti repo create team/my-repo
-arti repo create team/my-repo --description "Project docs" --visibility public
+arti collection create owner/my-docs
+arti collection create owner/my-docs --description "Project docs" --visibility public
 ```
 
 Options: `--description <desc>`, `--visibility <private|public>` (default: private).
 
-### repo list
+### collection list
 
-List repositories for a team.
+List collections for an owner.
 
 ```bash
-arti repo list team
+arti collection list owner
 ```

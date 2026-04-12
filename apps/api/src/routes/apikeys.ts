@@ -18,6 +18,10 @@ apikeys.get("/", async (c) => {
     .select({
       id: schema.apiKeys.id,
       label: schema.apiKeys.label,
+      keyHint: schema.apiKeys.keyHint,
+      enabled: schema.apiKeys.enabled,
+      usageCount: schema.apiKeys.usageCount,
+      expiresAt: schema.apiKeys.expiresAt,
       createdAt: schema.apiKeys.createdAt,
       lastUsedAt: schema.apiKeys.lastUsedAt,
     })
@@ -30,24 +34,63 @@ apikeys.get("/", async (c) => {
 // Create API key
 apikeys.post(
   "/",
-  zValidator("json", z.object({ label: z.string().max(100).default("") })),
+  zValidator(
+    "json",
+    z.object({
+      label: z.string().max(100).default(""),
+      expiresAt: z.string().datetime().optional(),
+    })
+  ),
   async (c) => {
     const user = c.get("user");
-    const { label } = c.req.valid("json");
+    const { label, expiresAt } = c.req.valid("json");
 
-    const rawKey = `oai_${crypto.randomBytes(24).toString("hex")}`;
+    const rawKey = `sk_${crypto.randomBytes(24).toString("hex")}`;
     const keyHash = crypto.createHash("sha256").update(rawKey).digest("hex");
+    const hexPart = rawKey.slice(3);
+    const keyHint = `sk_${hexPart.slice(0, 3)}...${hexPart.slice(-3)}`;
 
     const [key] = await db
       .insert(schema.apiKeys)
-      .values({ userId: user.id, keyHash, label })
+      .values({
+        userId: user.id,
+        keyHash,
+        keyHint,
+        label,
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
+      })
       .returning({
         id: schema.apiKeys.id,
         label: schema.apiKeys.label,
+        keyHint: schema.apiKeys.keyHint,
+        expiresAt: schema.apiKeys.expiresAt,
         createdAt: schema.apiKeys.createdAt,
       });
 
     return c.json({ key: rawKey, ...key }, 201);
+  }
+);
+
+// Toggle API key enabled/disabled
+apikeys.patch(
+  "/:id",
+  zValidator("json", z.object({ enabled: z.boolean() })),
+  async (c) => {
+    const user = c.get("user");
+    const keyId = c.req.param("id");
+    const { enabled } = c.req.valid("json");
+
+    const [updated] = await db
+      .update(schema.apiKeys)
+      .set({ enabled })
+      .where(and(eq(schema.apiKeys.id, keyId), eq(schema.apiKeys.userId, user.id)))
+      .returning({ id: schema.apiKeys.id, enabled: schema.apiKeys.enabled });
+
+    if (!updated) {
+      throw new AppError(ErrorCode.NOT_FOUND, "API key not found");
+    }
+
+    return c.json(updated);
   }
 );
 

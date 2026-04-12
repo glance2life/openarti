@@ -6,18 +6,18 @@ import type { WriteResponse } from "@openarti/shared";
 export function registerWrite(program: Command) {
   program
     .command("write <path>")
-    .description("Write a file to a repo (reads content from stdin)")
+    .description("Write a file to a collection (reads content from stdin)")
     .option("-m, --message <msg>", "Commit message")
     .action(async (pathArg: string, opts, cmd: Command) => {
       const ctx = getContext(cmd);
-      const { owner, repo, path: filePath } = parsePath(pathArg);
+      const { owner, collection, path: filePath } = parsePath(pathArg);
 
       const content = await readStdin();
 
       const result = await apiRequest<WriteResponse>(
         ctx,
         "POST",
-        `/repos/${owner}/${repo}/tools/write`,
+        `/collections/${owner}/${collection}/tools/write`,
         {
           path: filePath,
           content,

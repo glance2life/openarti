@@ -9,6 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useOpenDialog } from "@/hooks/use-dialog-router";
 import { Settings, LogOut, ChevronsUpDown } from "lucide-react";
 
 interface SidebarUserSectionProps {
@@ -16,6 +17,8 @@ interface SidebarUserSectionProps {
 }
 
 export function SidebarUserSection({ user }: SidebarUserSectionProps) {
+  const openDialog = useOpenDialog();
+
   const initial =
     user.name?.charAt(0)?.toUpperCase() || user.email.charAt(0).toUpperCase();
 
@@ -31,26 +34,22 @@ export function SidebarUserSection({ user }: SidebarUserSectionProps) {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        className="flex w-full items-center gap-2 px-4 py-3 text-sm hover:bg-sidebar-accent outline-none transition-colors"
-      >
-        <Avatar className="size-6">
-          <AvatarFallback className="text-xs">{initial}</AvatarFallback>
+      <DropdownMenuTrigger className="flex w-full items-center gap-2 px-3 py-2.5 hover:bg-sidebar-accent outline-none transition-colors">
+        <Avatar className="size-5">
+          <AvatarFallback className="text-[10px]">{initial}</AvatarFallback>
         </Avatar>
-        <span className="flex-1 truncate text-left font-medium">
-          {user.name}
-        </span>
-        <ChevronsUpDown className="size-4 text-muted-foreground" />
+        <span className="flex-1 truncate text-left">{user.name}</span>
+        <ChevronsUpDown className="size-3.5 opacity-40" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="bottom" align="start" className="w-56">
-        <div className="px-1.5 py-1">
+      <DropdownMenuContent side="top" align="start" className="w-56">
+        <div className="px-2 py-1.5">
           <p className="text-sm font-medium">{user.name}</p>
           <p className="text-xs text-muted-foreground">{user.email}</p>
         </div>
         <DropdownMenuSeparator />
-        <DropdownMenuItem render={<a href="/settings" />}>
+        <DropdownMenuItem onClick={() => openDialog("settings")}>
           <Settings className="size-4" />
-          Account settings
+          Settings
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleLogout}>

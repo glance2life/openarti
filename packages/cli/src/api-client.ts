@@ -1,3 +1,5 @@
+import { getStoredToken } from "./commands/login.js";
+
 export interface ResolvedContext {
   endpoint: string;
   token: string | undefined;
@@ -12,7 +14,8 @@ export function resolveContext(globalOpts: {
     process.env.OPENARTI_ENDPOINT ||
     "https://api.openarti.dev";
 
-  const token = globalOpts.token || process.env.OPENARTI_TOKEN;
+  // Priority: --token flag > env var > stored credentials
+  const token = globalOpts.token || process.env.OPENARTI_TOKEN || getStoredToken();
 
   return { endpoint, token };
 }

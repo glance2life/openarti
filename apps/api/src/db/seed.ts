@@ -9,6 +9,7 @@ async function seed() {
   const email = process.env.ADMIN_EMAIL || "admin@openarti.dev";
   const password =
     process.env.ADMIN_PASSWORD || crypto.randomBytes(12).toString("base64url");
+  const username = process.env.ADMIN_USERNAME || "admin";
 
   // Check if user already exists
   const [existing] = await db
@@ -24,7 +25,7 @@ async function seed() {
 
   // Create admin user via better-auth
   const { user } = await auth.api.signUpEmail({
-    body: { name: "admin", email, password },
+    body: { name: "admin", email, password, username },
   });
 
   // Set role to admin
@@ -32,19 +33,6 @@ async function seed() {
     .update(schema.users)
     .set({ role: "admin" })
     .where(eq(schema.users.id, user.id));
-
-  // Create default team
-  const [team] = await db
-    .insert(schema.teams)
-    .values({ name: "nestor" })
-    .returning();
-
-  // Add user as team owner
-  await db.insert(schema.teamMembers).values({
-    teamId: team.id,
-    userId: user.id,
-    role: "owner",
-  });
 
   // Generate API key
   const rawKey = `oai_${crypto.randomBytes(24).toString("hex")}`;
@@ -59,8 +47,8 @@ async function seed() {
   console.log("\n--- Seed Complete ---");
   console.log(`Email:    ${email}`);
   console.log(`Password: ${password}`);
+  console.log(`Username: ${username}`);
   console.log(`Role:     admin`);
-  console.log(`Team:     ${team.name}`);
   console.log(`API Key:  ${rawKey}`);
   console.log("Save these credentials — they cannot be retrieved again.\n");
 

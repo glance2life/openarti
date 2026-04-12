@@ -1,35 +1,35 @@
 "use client";
 
-import { usePathname } from "next/navigation";
-import { PinsProvider } from "@/hooks/pins-context";
-import { AppSidebar } from "@/components/sidebar/app-sidebar";
-
-interface Team {
-  id: string;
-  name: string;
-  description: string;
-  role: string;
-}
+import { Suspense } from "react";
+import { FinderNavigationProvider } from "@/hooks/finder-navigation-context";
+import { CollectionSidebar } from "@/components/finder/collection-sidebar";
+import { FileTreePanel } from "@/components/finder/file-tree-panel";
+import { DialogRouter } from "@/components/dialog-router";
 
 interface DashboardShellProps {
-  teams: Team[];
+  user: { name: string; email: string };
   children: React.ReactNode;
 }
 
-export function DashboardShell({ teams, children }: DashboardShellProps) {
-  const pathname = usePathname();
-  const segments = pathname.split("/").filter(Boolean);
-
-  const activeTeam = segments[0] || teams[0]?.name || "";
-
+export function DashboardShell({ user, children }: DashboardShellProps) {
   return (
-    <PinsProvider activeTeam={activeTeam}>
+    <FinderNavigationProvider>
       <div className="flex h-screen overflow-hidden">
-        <AppSidebar teams={teams} activeTeam={activeTeam} />
-        <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-5xl px-8 py-8">{children}</div>
+        {/* Column 1: Collection sidebar */}
+        <CollectionSidebar user={user} />
+
+        {/* Column 2: Toolbar + File tree */}
+        <FileTreePanel />
+
+        {/* Column 3: Content (full height) */}
+        <main className="flex-1 overflow-hidden bg-background">
+          {children}
         </main>
       </div>
-    </PinsProvider>
+
+      <Suspense>
+        <DialogRouter user={user} />
+      </Suspense>
+    </FinderNavigationProvider>
   );
 }

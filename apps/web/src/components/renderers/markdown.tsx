@@ -1,13 +1,19 @@
 "use client";
 
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { Streamdown } from "streamdown";
+import "streamdown/styles.css";
+import { code } from "@streamdown/code";
+import { math } from "@streamdown/math";
+import { mermaid } from "@streamdown/mermaid";
+import { cjk } from "@streamdown/cjk";
 import type { RendererProps } from "./registry";
 
 export function MarkdownRenderer({ content }: RendererProps) {
   return (
-    <article className="prose prose-gray max-w-none">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+    <article className="max-w-none p-6 font-serif">
+      <Streamdown plugins={{ code, math, mermaid, cjk }}>
+        {content}
+      </Streamdown>
     </article>
   );
 }
