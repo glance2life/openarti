@@ -52,6 +52,8 @@ app.get("/api/auth/config", (c) =>
   c.json({
     allowRegistration: process.env.ALLOW_REGISTRATION === "true",
     googleOAuth: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+    oidc: !!(process.env.OIDC_ISSUER && process.env.OIDC_CLIENT_ID && process.env.OIDC_CLIENT_SECRET),
+    oidcLabel: process.env.OIDC_LABEL || "SSO",
   })
 );
 

@@ -10,7 +10,8 @@ import type { AuthUser } from "../middleware/auth.js";
 import { resolveCollection, checkOwner } from "../services/collection.js";
 import { AppError, ErrorCode } from "@openarti/shared";
 
-const GIT_DATA_DIR = process.env.GIT_DATA_DIR || "./data/repos";
+import os from "node:os";
+const STORAGE_DIR = (process.env.STORAGE_DIR || path.join(os.homedir(), ".openarti", "storage")).replace(/^~/, os.homedir());
 
 const collections = new Hono();
 
@@ -49,7 +50,7 @@ collections.post(
       );
     }
 
-    const gitPath = path.resolve(GIT_DATA_DIR, user.username, `${body.name}.git`);
+    const gitPath = path.resolve(STORAGE_DIR, user.username, `${body.name}.git`);
     await engine.init(gitPath);
 
     const [collection] = await db

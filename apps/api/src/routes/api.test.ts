@@ -56,7 +56,7 @@ afterAll(async () => {
   await db.delete(schema.users).where(eq(schema.users.email, TEST_USER_EMAIL));
 
   // Clean up git data
-  const gitDataDir = process.env.GIT_DATA_DIR || "./data/test-repos";
+  const gitDataDir = process.env.STORAGE_DIR || "./data/test-repos";
   await fs.rm(`${gitDataDir}/${TEST_USERNAME}`, { recursive: true, force: true });
 });
 

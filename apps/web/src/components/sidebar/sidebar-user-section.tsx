@@ -34,9 +34,9 @@ export function SidebarUserSection({ user }: SidebarUserSectionProps) {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex w-full items-center gap-2 px-3 py-2.5 hover:bg-sidebar-accent outline-none transition-colors">
-        <Avatar className="size-5">
-          <AvatarFallback className="text-[10px]">{initial}</AvatarFallback>
+      <DropdownMenuTrigger className="flex w-full items-center gap-2 px-3 py-3.5 hover:bg-sidebar-accent outline-none transition-colors">
+        <Avatar className="size-9">
+          <AvatarFallback className="text-sm">{initial}</AvatarFallback>
         </Avatar>
         <span className="flex-1 truncate text-left">{user.name}</span>
         <ChevronsUpDown className="size-3.5 opacity-40" />

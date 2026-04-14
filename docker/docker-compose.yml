@@ -35,7 +35,7 @@ services:
       dockerfile: docker/Dockerfile.api
     environment:
       DATABASE_URL: postgresql://openarti:openarti@postgres:5432/openarti
-      GIT_DATA_DIR: /data/repos
+      STORAGE_DIR: /root/.openarti/storage
       PORT: "3001"
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-change-me-in-production}
       BETTER_AUTH_URL: http://localhost:3001
@@ -44,7 +44,7 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       WEB_ORIGIN: http://localhost:3000
     volumes:
-      - gitdata:/data/repos
+      - gitdata:/root/.openarti/storage
     ports:
       - "3001:3001"
     depends_on:

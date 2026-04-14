@@ -11,9 +11,13 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 export function LoginForm({
   googleOAuth,
   redirectTo,
+  oidc,
+  oidcLabel,
 }: {
   googleOAuth: boolean;
   redirectTo?: string;
+  oidc?: boolean;
+  oidcLabel?: string;
 }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -40,6 +44,13 @@ export function LoginForm({
   async function handleGoogle() {
     await authClient.signIn.social({
       provider: "google",
+      callbackURL: redirectTo || "/",
+    });
+  }
+
+  async function handleOIDC() {
+    await authClient.signIn.oauth2({
+      providerId: "oidc",
       callbackURL: redirectTo || "/",
     });
   }
@@ -77,20 +88,33 @@ export function LoginForm({
         </Button>
       </form>
 
-      {googleOAuth && (
+      {(googleOAuth || oidc) && (
         <>
           <div className="relative flex items-center gap-4">
             <Separator className="flex-1" />
             <span className="text-xs uppercase text-muted-foreground">or</span>
             <Separator className="flex-1" />
           </div>
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={handleGoogle}
-          >
-            Sign in with Google
-          </Button>
+          <div className="space-y-2">
+            {googleOAuth && (
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={handleGoogle}
+              >
+                Sign in with Google
+              </Button>
+            )}
+            {oidc && (
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={handleOIDC}
+              >
+                Sign in with {oidcLabel || "SSO"}
+              </Button>
+            )}
+          </div>
         </>
       )}
     </div>

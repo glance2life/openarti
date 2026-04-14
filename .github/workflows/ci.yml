@@ -52,5 +52,5 @@ jobs:
         run: pnpm --filter @openarti/api test
         env:
           DATABASE_URL: postgresql://openarti_test:openarti_test@localhost:5433/openarti_test
-          GIT_DATA_DIR: ./data/test-repos
+          STORAGE_DIR: ./data/test-repos
           NODE_ENV: test

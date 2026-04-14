@@ -18,9 +18,11 @@ async function getAuthConfig() {
     return res.json() as Promise<{
       allowRegistration: boolean;
       googleOAuth: boolean;
+      oidc: boolean;
+      oidcLabel: string;
     }>;
   } catch {
-    return { allowRegistration: false, googleOAuth: false };
+    return { allowRegistration: false, googleOAuth: false, oidc: false, oidcLabel: "SSO" };
   }
 }
 
@@ -41,7 +43,7 @@ export default async function LoginPage({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <LoginForm googleOAuth={config.googleOAuth} redirectTo={redirectTo} />
+          <LoginForm googleOAuth={config.googleOAuth} oidc={config.oidc} oidcLabel={config.oidcLabel} redirectTo={redirectTo} />
         </CardContent>
         {config.allowRegistration && (
           <CardFooter className="justify-center">

@@ -599,7 +599,8 @@ Try editing this file — your changes are saved as a new version automatically.
 `,
 };
 
-const GIT_DATA_DIR = process.env.GIT_DATA_DIR || "./data/repos";
+import os from "node:os";
+const STORAGE_DIR = (process.env.STORAGE_DIR || path.join(os.homedir(), ".openarti", "storage")).replace(/^~/, os.homedir());
 
 /**
  * Create and populate the "getting-started" collection for a new user.
@@ -609,7 +610,7 @@ export async function createGettingStartedCollection(
   username: string,
 ): Promise<string | null> {
   const collectionName = "getting-started";
-  const gitPath = path.resolve(GIT_DATA_DIR, username, `${collectionName}.git`);
+  const gitPath = path.resolve(STORAGE_DIR, username, `${collectionName}.git`);
 
   await engine.init(gitPath);
 

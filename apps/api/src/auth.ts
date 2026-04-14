@@ -1,9 +1,16 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { genericOAuth } from "better-auth/plugins/generic-oauth";
 import { eq } from "drizzle-orm";
 import { db } from "./db/index.js";
 import * as schema from "./db/schema.js";
 import { createGettingStartedCollection } from "./services/template.js";
+
+const oidcEnabled = !!(
+  process.env.OIDC_ISSUER &&
+  process.env.OIDC_CLIENT_ID &&
+  process.env.OIDC_CLIENT_SECRET
+);
 
 export const auth = betterAuth({
   basePath: "/api/auth",
@@ -24,6 +31,24 @@ export const auth = betterAuth({
       enabled: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
     },
   },
+  plugins: [
+    ...(oidcEnabled
+      ? [
+          genericOAuth({
+            config: [
+              {
+                providerId: "oidc",
+                discoveryUrl: `${process.env.OIDC_ISSUER}/.well-known/openid-configuration`,
+                clientId: process.env.OIDC_CLIENT_ID!,
+                clientSecret: process.env.OIDC_CLIENT_SECRET!,
+                scopes: ["openid", "profile", "email"],
+                pkce: true,
+              },
+            ],
+          }),
+        ]
+      : []),
+  ],
   user: {
     additionalFields: {
       username: {
