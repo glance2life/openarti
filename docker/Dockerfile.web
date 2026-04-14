@@ -6,6 +6,7 @@ WORKDIR /app
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json tsconfig.json ./
 COPY packages/shared/package.json packages/shared/tsconfig.json ./packages/shared/
 COPY apps/web/package.json apps/web/tsconfig.json apps/web/next.config.ts apps/web/postcss.config.mjs ./apps/web/
+RUN mkdir -p apps/web/public
 RUN pnpm install --frozen-lockfile
 COPY packages/shared/ ./packages/shared/
 COPY apps/web/ ./apps/web/
