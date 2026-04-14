@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "postinstall": "cp -r node_modules/vscode-material-icons/generated/icons public/file-icons",
+    "postinstall": "mkdir -p public/file-icons && cp -r node_modules/vscode-material-icons/generated/icons/* public/file-icons/",
     "build": "next build",
     "dev": "next dev --port 3000",
     "start": "next start",
