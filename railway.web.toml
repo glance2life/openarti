@@ -1,0 +1,8 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "docker/Dockerfile.web"
+
+[deploy]
+startCommand = "node apps/web/server.js"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
