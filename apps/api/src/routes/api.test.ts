@@ -118,8 +118,8 @@ describe("API", () => {
     const res = await req("GET", "/collections");
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.length).toBeGreaterThanOrEqual(1);
-    expect(body.some((r: { name: string }) => r.name === TEST_COLLECTION)).toBe(true);
+    expect(body.own.length).toBeGreaterThanOrEqual(1);
+    expect(body.own.some((r: { name: string }) => r.name === TEST_COLLECTION)).toBe(true);
   });
 
   it("GET /collections/:owner/:collection — collection detail", async () => {
