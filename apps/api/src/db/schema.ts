@@ -96,7 +96,7 @@ export const collections = pgTable(
     name: text("name").notNull(),
     description: text("description").default(""),
     visibility: visibilityEnum("visibility").notNull().default("private"),
-    gitPath: text("git_path").notNull(),
+    storagePath: text("storage_path").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("collections_owner_name").on(t.ownerId, t.name)]

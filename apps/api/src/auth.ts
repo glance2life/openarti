@@ -83,13 +83,13 @@ export const auth = betterAuth({
 
             const username = dbUser?.username || user.id.slice(0, 8);
 
-            const gitPath = await createGettingStartedCollection(username);
-            if (gitPath) {
+            const storagePath = await createGettingStartedCollection(username);
+            if (storagePath) {
               await db.insert(schema.collections).values({
                 ownerId: user.id,
                 name: "getting-started",
                 description: "Examples and playground for OpenArti",
-                gitPath,
+                storagePath,
               });
             }
           } catch (err) {

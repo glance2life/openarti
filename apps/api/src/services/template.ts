@@ -24,8 +24,8 @@ OpenArti is a **versioned knowledge base** that you and your AI agents can read 
 
 | Concept | What it means |
 |---------|---------------|
-| **Collection** | A versioned folder of files — like a git repo. You're inside one right now. |
-| **Artifact** | Any file in a collection. Every write creates a new version (commit). |
+| **Collection** | A versioned folder of files. You're inside one right now. |
+| **Artifact** | Any file in a collection. Every write creates a new version. |
 | **Rich preview** | OpenArti auto-detects file types and renders them visually — tables, diagrams, math, etc. |
 | **MCP** | [Model Context Protocol](https://modelcontextprotocol.io) — lets AI agents access your artifacts natively. |
 
@@ -47,11 +47,11 @@ OpenArti is a **versioned knowledge base** that you and your AI agents can read 
 
 ## Every file is versioned
 
-When you write or edit a file, OpenArti saves it as a **new version** (a git commit under the hood). This means you can:
+When you write or edit a file, OpenArti saves it as a **new version**. This means you can:
 
 - **Browse history** — see every change, who made it, and when
 - **View diffs** — compare any two versions side by side
-- **Blame lines** — trace each line to the commit that introduced it
+- **Blame lines** — trace each line to the version that introduced it
 
 You never lose work. Every version is preserved.
 
@@ -68,7 +68,7 @@ graph TB
     subgraph Server["API Server"]
         REST[REST API]
         MCPServer[MCP Server]
-        Git[Git Engine]
+        Engine[Arti Engine]
     end
 
     subgraph Storage
@@ -79,9 +79,9 @@ graph TB
     Web --> REST
     CLI --> REST
     MCP --> MCPServer
-    REST --> Git
-    MCPServer --> Git
-    Git --> Disk
+    REST --> Engine
+    MCPServer --> Engine
+    Engine --> Disk
     REST --> PG
 \`\`\`
 
@@ -340,12 +340,12 @@ features:
         Auth[Auth Layer<br/>better-auth]
         REST[REST Routes]
         MCPServer[MCP Server<br/>SSE Transport]
-        Git[Git Service<br/>bare repos]
+        Engine[Arti Engine<br/>commits + weaves]
     end
 
     subgraph Storage
         PG[(PostgreSQL<br/>metadata)]
-        Disk[(File System<br/>git bare repos)]
+        Disk[(File System<br/>collection dirs)]
     end
 
     Web --> REST
@@ -353,9 +353,9 @@ features:
     MCP --> MCPServer
     REST --> Auth
     MCPServer --> Auth
-    REST --> Git
-    MCPServer --> Git
-    Git --> Disk
+    REST --> Engine
+    MCPServer --> Engine
+    Engine --> Disk
     Auth --> PG
     REST --> PG
 `,
@@ -604,27 +604,25 @@ const STORAGE_DIR = (process.env.STORAGE_DIR || path.join(os.homedir(), ".openar
 
 /**
  * Create and populate the "getting-started" collection for a new user.
- * Returns the gitPath for the created collection, or null if creation failed.
+ * Returns the storagePath for the created collection, or null if creation failed.
  */
 export async function createGettingStartedCollection(
   username: string,
 ): Promise<string | null> {
   const collectionName = "getting-started";
-  const gitPath = path.resolve(STORAGE_DIR, username, `${collectionName}.git`);
+  const storagePath = path.resolve(STORAGE_DIR, username, collectionName);
 
-  await engine.init(gitPath);
+  await engine.init(storagePath);
 
-  // Write each template file as a separate commit
-  // (writeFile handles the CAS flow, and order doesn't matter)
   const author = "OpenArti <hello@openarti.dev>";
   for (const [filePath, content] of Object.entries(TEMPLATE_FILES)) {
-    await engine.writeFile(gitPath, filePath, content, {
+    await engine.writeFile(storagePath, filePath, content, {
       message: `add ${filePath}`,
       author,
     });
   }
 
-  return gitPath;
+  return storagePath;
 }
 
 export { TEMPLATE_FILES };
