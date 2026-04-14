@@ -89,9 +89,9 @@ flowchart TD
 **Filesystem layout:**
 
 ```
-/data/repos/
+{STORAGE_DIR}/
   {username}/
-    {collection_name}.git/
+    {collection_name}/
       .arti/
         weaves/{path}.weave   ← Weave CRDT state per file
         commits/{id}.json     ← Commit chain
@@ -122,7 +122,7 @@ erDiagram
         text name
         text description
         enum visibility "private | public"
-        text git_path
+        text storage_path
         timestamp created_at
     }
 
@@ -197,7 +197,7 @@ sequenceDiagram
 
     C->>WS: Subscribe to repo changes
     Note over API: Agent writes artifact
-    API->>API: git commit
+    API->>API: writeCommit (weave + commit json)
     API->>EE: Publish file.updated event
     EE->>WS: Forward event
     WS->>C: Push change notification

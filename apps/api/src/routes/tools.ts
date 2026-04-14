@@ -98,7 +98,7 @@ tools.post(
     const body = c.req.valid("json");
     const resolved = await resolveAndCheckRead(c);
 
-    const result = await engine.readFile(resolved.gitPath, body.path, {
+    const result = await engine.readFile(resolved.storagePath, body.path, {
       ref: body.ref,
       offset: body.offset,
       limit: body.limit,
@@ -125,7 +125,7 @@ tools.post(
     const resolved = await resolveCollection(owner, collectionName);
     await checkCollectionAccess(user.id, resolved.collectionId, resolved.ownerId, "edit");
 
-    const result = await engine.writeFile(resolved.gitPath, body.path, body.content, {
+    const result = await engine.writeFile(resolved.storagePath, body.path, body.content, {
       message: body.message,
       author: `${user.name} <${user.email}>`,
     });
@@ -163,7 +163,7 @@ tools.post(
       );
     }
 
-    const result = await engine.editFile(resolved.gitPath, body.path, edits, {
+    const result = await engine.editFile(resolved.storagePath, body.path, edits, {
       replaceAll: body.replace_all,
       message: body.message,
       author: `${user.name} <${user.email}>`,
@@ -186,7 +186,7 @@ tools.post(
     const body = c.req.valid("json");
     const resolved = await resolveAndCheckRead(c);
 
-    const entries = await engine.listFiles(resolved.gitPath, body.path);
+    const entries = await engine.listFiles(resolved.storagePath, body.path);
     return c.json({ entries });
   }
 );
@@ -203,7 +203,7 @@ tools.post(
     const resolved = await resolveCollection(owner, collectionName);
     await checkCollectionAccess(user.id, resolved.collectionId, resolved.ownerId, "edit");
 
-    const result = await engine.removeFile(resolved.gitPath, body.path, {
+    const result = await engine.removeFile(resolved.storagePath, body.path, {
       message: body.message,
       author: `${user.name} <${user.email}>`,
     });
@@ -221,7 +221,7 @@ tools.post(
     const body = c.req.valid("json");
     const resolved = await resolveAndCheckRead(c);
 
-    const result = await engine.grepFiles(resolved.gitPath, body.pattern, {
+    const result = await engine.grepFiles(resolved.storagePath, body.pattern, {
       glob: body.glob,
       context: body.context,
       ignoreCase: body.ignore_case,
@@ -240,7 +240,7 @@ tools.post(
     const body = c.req.valid("json");
     const resolved = await resolveAndCheckRead(c);
 
-    const files = await engine.globFiles(resolved.gitPath, body.pattern);
+    const files = await engine.globFiles(resolved.storagePath, body.pattern);
     return c.json({ files });
   }
 );
@@ -254,7 +254,7 @@ tools.post(
     const body = c.req.valid("json");
     const resolved = await resolveAndCheckRead(c);
 
-    const commits = await engine.getLog(resolved.gitPath, {
+    const commits = await engine.getLog(resolved.storagePath, {
       path: body.path,
       limit: body.limit,
     });
@@ -271,7 +271,7 @@ tools.post(
     const body = c.req.valid("json");
     const resolved = await resolveAndCheckRead(c);
 
-    const result = await engine.getDiff(resolved.gitPath, {
+    const result = await engine.getDiff(resolved.storagePath, {
       path: body.path,
       from: body.from,
       to: body.to,
@@ -294,7 +294,7 @@ tools.post(
     const body = c.req.valid("json");
     const resolved = await resolveAndCheckRead(c);
 
-    const lines = await engine.getBlame(resolved.gitPath, body.path);
+    const lines = await engine.getBlame(resolved.storagePath, body.path);
     return c.json({ path: body.path, lines });
   }
 );

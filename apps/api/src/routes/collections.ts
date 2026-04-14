@@ -50,8 +50,8 @@ collections.post(
       );
     }
 
-    const gitPath = path.resolve(STORAGE_DIR, user.username, `${body.name}.git`);
-    await engine.init(gitPath);
+    const storagePath = path.resolve(STORAGE_DIR, user.username, body.name);
+    await engine.init(storagePath);
 
     const [collection] = await db
       .insert(schema.collections)
@@ -60,7 +60,7 @@ collections.post(
         name: body.name,
         description: body.description ?? "",
         visibility: body.visibility ?? "private",
-        gitPath,
+        storagePath,
       })
       .returning();
 
@@ -86,14 +86,14 @@ collections.get(
     const user = c.get("user");
 
     const ownRows = await db
-      .select({ name: schema.collections.name, gitPath: schema.collections.gitPath })
+      .select({ name: schema.collections.name, storagePath: schema.collections.storagePath })
       .from(schema.collections)
       .where(eq(schema.collections.ownerId, user.id));
 
     const sharedRows = await db
       .select({
         name: schema.collections.name,
-        gitPath: schema.collections.gitPath,
+        storagePath: schema.collections.storagePath,
         ownerUsername: schema.users.username,
       })
       .from(schema.collectionAccess)
@@ -102,13 +102,13 @@ collections.get(
       .where(eq(schema.collectionAccess.userId, user.id));
 
     const allCollections = [
-      ...ownRows.map((r) => ({ owner: user.username, name: r.name, gitPath: r.gitPath })),
-      ...sharedRows.map((r) => ({ owner: r.ownerUsername, name: r.name, gitPath: r.gitPath })),
+      ...ownRows.map((r) => ({ owner: user.username, name: r.name, storagePath: r.storagePath })),
+      ...sharedRows.map((r) => ({ owner: r.ownerUsername, name: r.name, storagePath: r.storagePath })),
     ];
 
     const results = await Promise.allSettled(
       allCollections.map(async (col) => {
-        const commits = await engine.getLog(col.gitPath, { limit: 10 });
+        const commits = await engine.getLog(col.storagePath, { limit: 10 });
         const files: { owner: string; collection: string; path: string; timestamp: string }[] = [];
         for (const commit of commits) {
           for (const file of commit.files) {
@@ -159,7 +159,7 @@ collections.post(
       .select({
         id: schema.collections.id,
         name: schema.collections.name,
-        gitPath: schema.collections.gitPath,
+        storagePath: schema.collections.storagePath,
       })
       .from(schema.collections)
       .where(eq(schema.collections.ownerId, user.id));
@@ -168,7 +168,7 @@ collections.post(
       .select({
         id: schema.collections.id,
         name: schema.collections.name,
-        gitPath: schema.collections.gitPath,
+        storagePath: schema.collections.storagePath,
         ownerUsername: schema.users.username,
       })
       .from(schema.collectionAccess)
@@ -177,13 +177,13 @@ collections.post(
       .where(eq(schema.collectionAccess.userId, user.id));
 
     const allCollections = [
-      ...ownRows.map((r) => ({ id: r.id, name: r.name, owner: user.username, gitPath: r.gitPath })),
-      ...sharedRows.map((r) => ({ id: r.id, name: r.name, owner: r.ownerUsername, gitPath: r.gitPath })),
+      ...ownRows.map((r) => ({ id: r.id, name: r.name, owner: user.username, storagePath: r.storagePath })),
+      ...sharedRows.map((r) => ({ id: r.id, name: r.name, owner: r.ownerUsername, storagePath: r.storagePath })),
     ];
 
     const results = await Promise.allSettled(
       allCollections.map(async (col) => {
-        const files = await engine.globFiles(col.gitPath, pattern);
+        const files = await engine.globFiles(col.storagePath, pattern);
         return { collection: { id: col.id, name: col.name, owner: col.owner }, files };
       })
     );

@@ -373,7 +373,7 @@ POST /repos/nestor/feature-x/tools/read
   "path": "product-spec.md",
   "offset": 1,            // Optional, start line (1-based)
   "limit": 200,           // Optional, number of lines
-  "ref": "abc1234",       // Optional, git commit hash (read historical version)
+  "ref": "abc1234",       // Optional, commit id (read historical version)
   "include_comments": true // Optional, include comments (default false)
 }
 ```
