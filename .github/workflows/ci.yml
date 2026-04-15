@@ -41,7 +41,7 @@ jobs:
         run: pnpm build
 
       - name: Test CLI
-        run: pnpm --filter openarti test
+        run: pnpm --filter openarti-cli test
 
       - name: Migrate test database
         run: pnpm --filter @openarti/api db:generate && pnpm --filter @openarti/api db:migrate
