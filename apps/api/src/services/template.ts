@@ -1,4 +1,3 @@
-import path from "node:path";
 import { engine } from "./storage.js";
 
 /**
@@ -599,30 +598,20 @@ Try editing this file — your changes are saved as a new version automatically.
 `,
 };
 
-import os from "node:os";
-const STORAGE_DIR = (process.env.STORAGE_DIR || path.join(os.homedir(), ".openarti", "storage")).replace(/^~/, os.homedir());
-
 /**
- * Create and populate the "getting-started" collection for a new user.
- * Returns the storagePath for the created collection, or null if creation failed.
+ * Populate the "getting-started" collection with template files.
+ * The collection row must already exist; `collectionId` identifies it.
  */
-export async function createGettingStartedCollection(
-  username: string,
-): Promise<string | null> {
-  const collectionName = "getting-started";
-  const storagePath = path.resolve(STORAGE_DIR, username, collectionName);
-
-  await engine.init(storagePath);
-
+export async function populateGettingStartedCollection(
+  collectionId: string,
+): Promise<void> {
   const author = "OpenArti <hello@openarti.dev>";
   for (const [filePath, content] of Object.entries(TEMPLATE_FILES)) {
-    await engine.writeFile(storagePath, filePath, content, {
+    await engine.writeFile(collectionId, filePath, content, {
       message: `add ${filePath}`,
       author,
     });
   }
-
-  return storagePath;
 }
 
 export { TEMPLATE_FILES };

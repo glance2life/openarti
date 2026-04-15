@@ -1,10 +1,9 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
-import { eq } from "drizzle-orm";
 import { db } from "./db/index.js";
 import * as schema from "./db/schema.js";
-import { createGettingStartedCollection } from "./services/template.js";
+import { populateGettingStartedCollection } from "./services/template.js";
 
 const oidcEnabled = !!(
   process.env.OIDC_ISSUER &&
@@ -74,23 +73,17 @@ export const auth = betterAuth({
       create: {
         after: async (user) => {
           try {
-            // Look up username from the users table (better-auth may not include it in the hook payload)
-            const [dbUser] = await db
-              .select({ username: schema.users.username })
-              .from(schema.users)
-              .where(eq(schema.users.id, user.id))
-              .limit(1);
-
-            const username = dbUser?.username || user.id.slice(0, 8);
-
-            const storagePath = await createGettingStartedCollection(username);
-            if (storagePath) {
-              await db.insert(schema.collections).values({
+            const [collection] = await db
+              .insert(schema.collections)
+              .values({
                 ownerId: user.id,
                 name: "getting-started",
                 description: "Examples and playground for OpenArti",
-                storagePath,
-              });
+              })
+              .returning({ id: schema.collections.id });
+
+            if (collection) {
+              await populateGettingStartedCollection(collection.id);
             }
           } catch (err) {
             console.error("Failed to create getting-started collection for user:", user.id, err);

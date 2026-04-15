@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { Eye, Code, Download, MoreHorizontal } from "lucide-react";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import {
@@ -18,6 +18,9 @@ import {
 } from "@/components/renderers/registry";
 import { CodeRenderer } from "@/components/renderers/code";
 import { SharePopover } from "@/components/share-popover";
+import { useFileRealtime } from "@/lib/realtime/hooks";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 interface ArtifactViewerProps {
   owner: string;
@@ -34,7 +37,17 @@ export function ArtifactViewer({
   filename,
   initialContent,
 }: ArtifactViewerProps) {
-  const openApi = /\.ya?ml$|\.json$/.test(filename) && isOpenApiContent(initialContent);
+  const [content, setContent] = useState(initialContent);
+
+  // Reset content when navigating between files (initialContent prop changes)
+  useEffect(() => {
+    setContent(initialContent);
+  }, [initialContent]);
+
+  const openApi = useMemo(
+    () => /\.ya?ml$|\.json$/.test(filename) && isOpenApiContent(content),
+    [content, filename]
+  );
   const canPreview = openApi || hasPreview(filename);
   const typeLabel = getFileTypeLabel(filename);
   const [mode, setMode] = useState<"preview" | "plain">(() => {
@@ -48,7 +61,29 @@ export function ArtifactViewer({
     setMode(v);
     localStorage.setItem("artifact-view-mode", v);
   }, []);
-  const [content] = useState(initialContent);
+
+  // Realtime: refetch current file when it changes on the server
+  const refetch = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `${API_URL}/collections/${encodeURIComponent(owner)}/${encodeURIComponent(collection)}/tools/read`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: filePath }),
+        }
+      );
+      if (res.ok) {
+        const data = (await res.json()) as { content?: string };
+        setContent(data.content ?? "");
+      }
+    } catch {
+      // swallow — next realtime tick will retry
+    }
+  }, [owner, collection, filePath]);
+
+  useFileRealtime({ owner, name: collection, path: filePath }, refetch);
 
   const handleDownload = useCallback(() => {
     const blob = new Blob([content], { type: "text/plain" });

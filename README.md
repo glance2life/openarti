@@ -4,12 +4,13 @@
 
 Different agents — Claude Code, Cursor, Codex CLI, and others — read and write artifacts to a shared collection. Humans review and browse them in the browser. Think of it as Git for AI-generated content: versioned, searchable, and accessible from any agent.
 
-[CLI Reference](#cli-reference) | [Self-Hosting](#self-hosting) | [Project Structure](#project-structure)
+[CLI Reference](#cli-reference) | [MCP Server](#mcp-server) | [Self-Hosting](#self-hosting) | [Deploy to Cloud](#deploy-to-cloud) | [Project Structure](#project-structure)
 
-- **Agent-native access** — CLI and Skill designed for agents, not just humans
+- **Agent-native access** — CLI, MCP server, and Skill designed for agents, not just humans
 - **Version controlled** — every write is a commit with full history, diff, and blame
 - **Browser rendering** — Markdown, Mermaid, HTML, code — all rendered in the web UI
 - **Self-hostable** — full-stack open source, deploy with Docker Compose
+- **Serverless-ready** — stateless API, all state in Postgres; deploys to Vercel / Workers / Lambda or any container host
 
 ## Quick Start
 
@@ -67,6 +68,29 @@ arti edit nestor/docs/api.md --old "v1" --new "v2" -m "update version"
 
 Global options: `--token <token>`, `--endpoint <url>`
 
+## MCP Server
+
+OpenArti exposes a native [Model Context Protocol](https://modelcontextprotocol.io) server, so MCP-capable clients (Claude Desktop, Claude Code, Cursor, etc.) can read and write your collections directly — no copy-paste.
+
+Endpoint: `POST /mcp` (on the API server).
+
+The transport is **stateless Streamable HTTP** (2025-03 spec, JSON responses — no SSE, no session affinity), which means the endpoint works just as well behind serverless functions as behind a long-running container.
+
+Configure your MCP client:
+
+```json
+{
+  "mcpServers": {
+    "openarti": {
+      "url": "https://your-api-host/mcp",
+      "headers": { "Authorization": "Bearer oai_your_key_here" }
+    }
+  }
+}
+```
+
+All CLI tools (`read`, `write`, `edit`, `rm`, `ls`, `grep`, `glob`, `log`, `diff`, `blame`) are exposed as MCP tools.
+
 ## Self-Hosting
 
 ### Prerequisites
@@ -113,6 +137,34 @@ export OPENARTI_ENDPOINT=http://localhost:3001
 ```bash
 pnpm db:down
 ```
+
+## Deploy to Cloud
+
+All state lives in Postgres — there's no local filesystem, no object storage, no Redis. This means OpenArti drops cleanly onto standard cloud building blocks.
+
+Minimum viable deployment:
+
+```
+Web (Vercel / Netlify / Pages)
+  └─► API (Vercel Functions / Workers / Fly / Railway / Cloud Run)
+       └─► Postgres (Supabase / Neon / RDS)
+```
+
+Environment variables (see `.env.example`):
+
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_URL` | Postgres connection string |
+| `BETTER_AUTH_URL` | Public URL of the API |
+| `BETTER_AUTH_SECRET` | Random secret for session signing |
+| `WEB_ORIGIN` | Public URL of the web app (CORS) |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Optional — enable Google OAuth |
+| `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` | Optional — enable generic OIDC |
+| `ALLOW_REGISTRATION` | `true` to allow public signups |
+
+**Deploying serverless?** Swap `DATABASE_URL` to a connection pooler (Supabase port 6543 transaction mode, or Neon's serverless driver) so every cold start doesn't open a fresh Postgres connection. Application code is unchanged.
+
+See [`DESIGN-DEPLOYMENT.md`](./DESIGN-DEPLOYMENT.md) for the full deployment matrix and trade-offs.
 
 ## Project Structure
 

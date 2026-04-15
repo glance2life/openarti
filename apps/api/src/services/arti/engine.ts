@@ -1,11 +1,34 @@
-import { randomUUID } from "node:crypto";
 import path from "node:path";
+import { and, eq } from "drizzle-orm";
 import { AppError, ErrorCode } from "@openarti/shared";
 import type { LsEntry, GrepMatch, LogCommit, BlameLine } from "@openarti/shared";
+import { db, schema } from "../../db/index.js";
 import type { StorageEngine } from "../storage.js";
-import { LocalFS } from "./collection-fs.js";
-import type { CollectionFS } from "./collection-fs.js";
-import { serialize, deserialize, initialState, currentLines, updateState } from "./weave.js";
+import { getOpcodes } from "./weave.js";
+import {
+  applyUpdate,
+  currentLines,
+  deserializeWeave,
+  emptyWeave,
+  serializeWeave,
+} from "./weave-ops.js";
+import {
+  advisoryLock,
+  getHead,
+  genCommitId,
+  getInsertAttributions,
+  insertCommit,
+  insertWeaveOps,
+  listCommits,
+  listLiveFiles,
+  listLivePaths,
+  loadSnapshot,
+  tombstoneSnapshot,
+  upsertRef,
+  upsertSnapshot,
+} from "./db-ops.js";
+
+const DEFAULT_AUTHOR = "openarti <bot@openarti.dev>";
 
 // ---- Helpers ----
 
@@ -18,8 +41,38 @@ function validatePath(filePath: string): void {
   }
 }
 
-function weavePath(filePath: string): string {
-  return `.arti/weaves/${filePath}.weave`;
+function splitLines(content: string): string[] {
+  const lines = content.split("\n");
+  if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+  return lines;
+}
+
+function joinLines(lines: string[]): string {
+  return lines.length === 0 ? "" : lines.join("\n") + "\n";
+}
+
+function globToRegex(pattern: string): RegExp {
+  let re = "^";
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i];
+    if (c === "*") {
+      if (pattern[i + 1] === "*") {
+        re += ".*";
+        i++;
+        if (pattern[i + 1] === "/") i++; // consume trailing slash of **/
+      } else {
+        re += "[^/]*";
+      }
+    } else if (c === "?") {
+      re += "[^/]";
+    } else if (".+^${}()|[]\\".includes(c)) {
+      re += "\\" + c;
+    } else {
+      re += c;
+    }
+  }
+  re += "$";
+  return new RegExp(re);
 }
 
 function formatReadResult(
@@ -27,11 +80,7 @@ function formatReadResult(
   commit: string,
   opts?: { offset?: number; limit?: number }
 ): { content: string; lines: number; commit: string } {
-  const allLines = raw.split("\n");
-  // Remove trailing empty element from final newline
-  if (allLines.length > 0 && allLines[allLines.length - 1] === "") {
-    allLines.pop();
-  }
+  const allLines = splitLines(raw);
   const totalLines = allLines.length;
 
   if (opts?.offset || opts?.limit) {
@@ -50,159 +99,176 @@ function formatReadResult(
   return { content: formatted, lines: totalLines, commit };
 }
 
-interface CommitData {
-  id: string;
-  parent: string | null;
-  author: string;
-  message: string;
-  timestamp: string;
-  files: { path: string; action: string }[];
-}
-
-async function readHeadSafe(cfs: CollectionFS): Promise<string | null> {
-  try {
-    return (await cfs.readFile(".arti/refs/HEAD")).trim();
-  } catch {
-    return null;
+// Unified-diff-like output from two line arrays, using existing opcode logic.
+function computeUnifiedDiff(
+  oldLines: string[],
+  newLines: string[],
+  filePath: string,
+  action: "create" | "update" | "delete"
+): { text: string; added: number; removed: number } {
+  if (action === "create") {
+    const body: string[] = [];
+    body.push(`--- /dev/null`, `+++ b/${filePath}`);
+    body.push(`@@ -0,0 +1,${newLines.length} @@`);
+    for (const l of newLines) body.push(`+${l}`);
+    return { text: body.join("\n"), added: newLines.length, removed: 0 };
   }
-}
-
-async function writeCommit(
-  cfs: CollectionFS,
-  data: { author?: string; message?: string; files: { path: string; action: string }[] }
-): Promise<CommitData> {
-  const head = await readHeadSafe(cfs);
-  const id = randomUUID().replace(/-/g, "").slice(0, 16);
-  const commit: CommitData = {
-    id,
-    parent: head,
-    author: data.author ?? "openarti <bot@openarti.dev>",
-    message: data.message ?? "",
-    timestamp: new Date().toISOString(),
-    files: data.files,
-  };
-  await cfs.writeFile(`.arti/commits/${id}.json`, JSON.stringify(commit));
-  await cfs.writeFile(".arti/refs/HEAD", id);
-  return commit;
-}
-
-async function readCommit(cfs: CollectionFS, commitId: string): Promise<CommitData> {
-  const raw = await cfs.readFile(`.arti/commits/${commitId}.json`);
-  return JSON.parse(raw);
-}
-
-async function walkCommitChain(
-  cfs: CollectionFS,
-  limit: number,
-  pathFilter?: string
-): Promise<LogCommit[]> {
-  const results: LogCommit[] = [];
-  let commitId = await readHeadSafe(cfs);
-  while (commitId && results.length < limit) {
-    let commit: CommitData;
-    try {
-      commit = await readCommit(cfs, commitId);
-    } catch {
-      break;
-    }
-    if (!pathFilter || commit.files.some((f) => f.path === pathFilter)) {
-      results.push({
-        hash: commit.id,
-        message: commit.message,
-        author: commit.author,
-        timestamp: commit.timestamp,
-        files: commit.files.map((f) => f.path),
-      });
-    }
-    commitId = commit.parent;
+  if (action === "delete") {
+    const body: string[] = [];
+    body.push(`--- a/${filePath}`, `+++ /dev/null`);
+    body.push(`@@ -1,${oldLines.length} +0,0 @@`);
+    for (const l of oldLines) body.push(`-${l}`);
+    return { text: body.join("\n"), added: 0, removed: oldLines.length };
   }
-  return results;
+
+  const ops = getOpcodes(oldLines, newLines);
+  const body: string[] = [`--- a/${filePath}`, `+++ b/${filePath}`];
+  body.push(`@@ -1,${oldLines.length} +1,${newLines.length} @@`);
+  let added = 0;
+  let removed = 0;
+  for (const [tag, aBegin, aEnd, bBegin, bEnd] of ops) {
+    if (tag === "equal") {
+      for (let i = aBegin; i < aEnd; i++) body.push(` ${oldLines[i]}`);
+    } else if (tag === "delete") {
+      for (let i = aBegin; i < aEnd; i++) {
+        body.push(`-${oldLines[i]}`);
+        removed++;
+      }
+    } else if (tag === "insert") {
+      for (let i = bBegin; i < bEnd; i++) {
+        body.push(`+${newLines[i]}`);
+        added++;
+      }
+    } else {
+      // replace
+      for (let i = aBegin; i < aEnd; i++) {
+        body.push(`-${oldLines[i]}`);
+        removed++;
+      }
+      for (let i = bBegin; i < bEnd; i++) {
+        body.push(`+${newLines[i]}`);
+        added++;
+      }
+    }
+  }
+  return { text: body.join("\n"), added, removed };
+}
+
+async function recordCommitFile(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  commitId: string,
+  collectionId: string,
+  filePath: string,
+  action: "create" | "update" | "delete",
+  oldLines: string[],
+  newLines: string[]
+): Promise<void> {
+  const diff = computeUnifiedDiff(oldLines, newLines, filePath, action);
+  await tx.insert(schema.artiCommitFiles).values({
+    commitId,
+    collectionId,
+    path: filePath,
+    action,
+    diffText: diff.text,
+    addedLines: diff.added,
+    removedLines: diff.removed,
+  });
 }
 
 // ---- ArtiEngine ----
 
 export const artiEngine: StorageEngine = {
-  async init(collectionPath) {
-    const cfs = new LocalFS(collectionPath);
-    await cfs.mkdir(".arti/weaves");
-    await cfs.mkdir(".arti/commits");
-    await cfs.mkdir(".arti/refs");
+  async init(_collectionId) {
+    // No-op: the collections row in the DB is the only initialization needed.
   },
 
-  async readFile(collectionPath, filePath, opts) {
+  async readFile(collectionId, filePath, opts) {
     validatePath(filePath);
-    const cfs = new LocalFS(collectionPath);
-
     if (opts?.ref) {
-      // v1: ref not supported yet (needs extended weave)
-      throw new AppError(ErrorCode.BAD_REQUEST, "Reading at ref is not yet supported for arti engine");
+      throw new AppError(
+        ErrorCode.BAD_REQUEST,
+        "Reading at ref is not yet supported"
+      );
     }
-
-    // Current version: read file directly
-    let raw: string;
-    try {
-      raw = await cfs.readFile(filePath);
-    } catch {
+    const snap = await loadSnapshot(db as unknown as Parameters<Parameters<typeof db.transaction>[0]>[0], collectionId, filePath);
+    if (!snap || snap.deletedAt !== null) {
       throw new AppError(ErrorCode.NOT_FOUND, `File '${filePath}' not found`);
     }
-
-    const head = await readHeadSafe(cfs);
-    return formatReadResult(raw, head ?? "", opts);
+    return formatReadResult(snap.content, snap.lastCommitId, opts);
   },
 
-  async writeFile(collectionPath, filePath, content, opts) {
+  async writeFile(collectionId, filePath, content, opts) {
     validatePath(filePath);
-    const cfs = new LocalFS(collectionPath);
-    const wp = weavePath(filePath);
-    const existed = await cfs.exists(wp);
-    const release = await cfs.lock(wp);
-    try {
-      const lines = content.split("\n");
-      // Remove trailing empty from final newline (match git behavior)
-      if (lines.length > 0 && lines[lines.length - 1] === "") {
-        lines.pop();
-      }
+    const newLines = splitLines(content);
 
-      let newState: string;
-      if (existed) {
-        const oldState = await cfs.readFile(wp);
-        newState = updateState(oldState, lines);
-      } else {
-        newState = initialState(lines);
-      }
+    return db.transaction(async (tx) => {
+      await advisoryLock(tx, `${collectionId}:${filePath}`);
 
-      await cfs.writeFile(wp, newState);
-      await cfs.writeFile(filePath, content);
-      const commit = await writeCommit(cfs, {
-        author: opts?.author,
-        message: opts?.message ?? `write ${filePath}`,
-        files: [{ path: filePath, action: existed ? "update" : "create" }],
-      });
+      const snap = await loadSnapshot(tx, collectionId, filePath);
+      const existed = snap !== null && snap.deletedAt === null;
+      const current = snap ? deserializeWeave(snap.weaveState) : emptyWeave();
+      const oldLines = snap ? splitLines(snap.content) : [];
+
+      const { next, ops } = applyUpdate(current, newLines);
+      const nextAliveLines = currentLines(next);
+      const nextContent = joinLines(nextAliveLines);
+
+      const parentId = await getHead(tx, collectionId);
+      const commit = await insertCommit(
+        tx,
+        {
+          collectionId,
+          author: opts?.author ?? DEFAULT_AUTHOR,
+          message: opts?.message ?? `write ${filePath}`,
+          files: [], // inserted below via recordCommitFile to include diff
+        },
+        parentId
+      );
+      await recordCommitFile(
+        tx,
+        commit.id,
+        collectionId,
+        filePath,
+        existed ? "update" : "create",
+        oldLines,
+        nextAliveLines
+      );
+      await insertWeaveOps(tx, collectionId, filePath, commit.id, ops);
+      await upsertSnapshot(
+        tx,
+        collectionId,
+        filePath,
+        nextContent,
+        serializeWeave(next),
+        nextAliveLines.length,
+        commit.id
+      );
+      await upsertRef(tx, collectionId, "HEAD", commit.id);
 
       return { commit: commit.id, created: !existed };
-    } finally {
-      await release();
-    }
+    });
   },
 
-  async editFile(collectionPath, filePath, edits, opts) {
+  async editFile(collectionId, filePath, edits, opts) {
     validatePath(filePath);
-    const cfs = new LocalFS(collectionPath);
-    const wp = weavePath(filePath);
-    const release = await cfs.lock(wp);
-    try {
-      let content: string;
-      try {
-        content = await cfs.readFile(filePath);
-      } catch {
+
+    return db.transaction(async (tx) => {
+      await advisoryLock(tx, `${collectionId}:${filePath}`);
+
+      const snap = await loadSnapshot(tx, collectionId, filePath);
+      if (!snap || snap.deletedAt !== null) {
         throw new AppError(ErrorCode.NOT_FOUND, `File '${filePath}' not found`);
       }
 
+      let content = snap.content;
       let totalReplaced = 0;
       for (const edit of edits) {
         const count = content.split(edit.old_string).length - 1;
         if (count === 0) {
-          throw new AppError(ErrorCode.NOT_FOUND, `old_string not found in '${filePath}'`);
+          throw new AppError(
+            ErrorCode.NOT_FOUND,
+            `old_string not found in '${filePath}'`
+          );
         }
         if (count > 1 && !opts?.replaceAll) {
           throw new AppError(
@@ -215,80 +281,135 @@ export const artiEngine: StorageEngine = {
           totalReplaced += count;
         } else {
           const idx = content.indexOf(edit.old_string);
-          content = content.slice(0, idx) + edit.new_string + content.slice(idx + edit.old_string.length);
+          content =
+            content.slice(0, idx) +
+            edit.new_string +
+            content.slice(idx + edit.old_string.length);
           totalReplaced += 1;
         }
       }
 
-      // Update weave
-      const lines = content.split("\n");
-      if (lines.length > 0 && lines[lines.length - 1] === "") {
-        lines.pop();
-      }
-      const oldState = await cfs.readFile(wp);
-      const newState = updateState(oldState, lines);
-      await cfs.writeFile(wp, newState);
-      await cfs.writeFile(filePath, content);
+      const newLines = splitLines(content);
+      const oldLines = splitLines(snap.content);
+      const current = deserializeWeave(snap.weaveState);
+      const { next, ops } = applyUpdate(current, newLines);
+      const nextAliveLines = currentLines(next);
+      const nextContent = joinLines(nextAliveLines);
 
-      const commit = await writeCommit(cfs, {
-        author: opts?.author,
-        message: opts?.message ?? `edit ${filePath}`,
-        files: [{ path: filePath, action: "update" }],
-      });
+      const parentId = await getHead(tx, collectionId);
+      const commit = await insertCommit(
+        tx,
+        {
+          collectionId,
+          author: opts?.author ?? DEFAULT_AUTHOR,
+          message: opts?.message ?? `edit ${filePath}`,
+          files: [],
+        },
+        parentId
+      );
+      await recordCommitFile(
+        tx,
+        commit.id,
+        collectionId,
+        filePath,
+        "update",
+        oldLines,
+        nextAliveLines
+      );
+      await insertWeaveOps(tx, collectionId, filePath, commit.id, ops);
+      await upsertSnapshot(
+        tx,
+        collectionId,
+        filePath,
+        nextContent,
+        serializeWeave(next),
+        nextAliveLines.length,
+        commit.id
+      );
+      await upsertRef(tx, collectionId, "HEAD", commit.id);
 
       return { commit: commit.id, replaced: totalReplaced };
-    } finally {
-      await release();
-    }
-  },
-
-  async removeFile(collectionPath, filePath, opts) {
-    validatePath(filePath);
-    const cfs = new LocalFS(collectionPath);
-
-    // Check file exists
-    if (!(await cfs.exists(filePath))) {
-      throw new AppError(ErrorCode.NOT_FOUND, `File '${filePath}' not found`);
-    }
-
-    await cfs.unlink(filePath);
-    // Weave preserved for history
-
-    const commit = await writeCommit(cfs, {
-      author: opts?.author,
-      message: opts?.message ?? `delete ${filePath}`,
-      files: [{ path: filePath, action: "delete" }],
     });
-
-    return { commit: commit.id };
   },
 
-  async listFiles(collectionPath, dirPath) {
-    const cfs = new LocalFS(collectionPath);
-    let entries: { name: string; isDirectory: boolean }[];
-    try {
-      entries = await cfs.readdir(dirPath || ".");
-    } catch {
-      return [];
+  async removeFile(collectionId, filePath, opts) {
+    validatePath(filePath);
+
+    return db.transaction(async (tx) => {
+      await advisoryLock(tx, `${collectionId}:${filePath}`);
+
+      const snap = await loadSnapshot(tx, collectionId, filePath);
+      if (!snap || snap.deletedAt !== null) {
+        throw new AppError(ErrorCode.NOT_FOUND, `File '${filePath}' not found`);
+      }
+
+      const oldLines = splitLines(snap.content);
+      const parentId = await getHead(tx, collectionId);
+      const commit = await insertCommit(
+        tx,
+        {
+          collectionId,
+          author: opts?.author ?? DEFAULT_AUTHOR,
+          message: opts?.message ?? `delete ${filePath}`,
+          files: [],
+        },
+        parentId
+      );
+      await recordCommitFile(
+        tx,
+        commit.id,
+        collectionId,
+        filePath,
+        "delete",
+        oldLines,
+        []
+      );
+      await tombstoneSnapshot(tx, collectionId, filePath, commit.id);
+      await upsertRef(tx, collectionId, "HEAD", commit.id);
+
+      return { commit: commit.id };
+    });
+  },
+
+  async listFiles(collectionId, dirPath) {
+    const paths = await listLivePaths(collectionId);
+    const prefix =
+      !dirPath || dirPath === "." || dirPath === "" ? "" : dirPath.replace(/\/$/, "") + "/";
+
+    const names = new Map<string, boolean>(); // name -> isDir
+    for (const p of paths) {
+      if (!p.startsWith(prefix)) continue;
+      const rest = p.slice(prefix.length);
+      if (rest.length === 0) continue;
+      const slashIdx = rest.indexOf("/");
+      if (slashIdx === -1) {
+        names.set(rest, false);
+      } else {
+        const dir = rest.slice(0, slashIdx);
+        if (!names.has(dir)) names.set(dir, true);
+      }
     }
-    return entries
-      .filter((e) => e.name !== ".arti")
-      .map((e) => ({ name: e.name, type: (e.isDirectory ? "dir" : "file") as "file" | "dir" }));
+
+    return [...names.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([name, isDir]) => ({
+        name,
+        type: (isDir ? "dir" : "file") as "file" | "dir",
+      }));
   },
 
-  async grepFiles(collectionPath, pattern, opts) {
-    const cfs = new LocalFS(collectionPath);
-    const files = opts?.glob ? await cfs.glob(opts.glob) : await cfs.glob("**/*");
-
+  async grepFiles(collectionId, pattern, opts) {
+    const files = await listLiveFiles(collectionId);
+    const globRe = opts?.glob ? globToRegex(opts.glob) : null;
     const regex = new RegExp(pattern, opts?.ignoreCase ? "gi" : "g");
     const matches: GrepMatch[] = [];
     let totalMatches = 0;
 
     for (const file of files) {
-      const content = await cfs.readFile(file);
-      const lines = content.split("\n");
-      const matchingLineIndices: Set<number> = new Set();
-      const actualMatchLines: Set<number> = new Set();
+      if (globRe && !globRe.test(file.path)) continue;
+      const lines = splitLines(file.content);
+      const matchingLineIndices = new Set<number>();
+      const actualMatchLines = new Set<number>();
 
       lines.forEach((text, i) => {
         regex.lastIndex = 0;
@@ -298,153 +419,118 @@ export const artiEngine: StorageEngine = {
           const ctx = opts?.context ?? 0;
           const start = Math.max(0, i - ctx);
           const end = Math.min(lines.length - 1, i + ctx);
-          for (let j = start; j <= end; j++) {
-            matchingLineIndices.add(j);
-          }
+          for (let j = start; j <= end; j++) matchingLineIndices.add(j);
         }
       });
 
       if (matchingLineIndices.size > 0) {
         const sortedIndices = [...matchingLineIndices].sort((a, b) => a - b);
-        const grepLines = sortedIndices.map((idx) => ({
-          line: idx + 1,
-          text: lines[idx],
-          match: actualMatchLines.has(idx),
-        }));
-        matches.push({ path: file, lines: grepLines });
+        matches.push({
+          path: file.path,
+          lines: sortedIndices.map((idx) => ({
+            line: idx + 1,
+            text: lines[idx],
+            match: actualMatchLines.has(idx),
+          })),
+        });
       }
     }
 
     return { matches, totalMatches };
   },
 
-  async globFiles(collectionPath, pattern) {
-    const cfs = new LocalFS(collectionPath);
-    const files = await cfs.glob(pattern);
-    return files.map((p) => ({ path: p }));
+  async globFiles(collectionId, pattern) {
+    const paths = await listLivePaths(collectionId);
+    const re = globToRegex(pattern);
+    return paths.filter((p) => re.test(p)).map((p) => ({ path: p }));
   },
 
-  async getLog(collectionPath, opts) {
-    const cfs = new LocalFS(collectionPath);
-    return walkCommitChain(cfs, opts?.limit ?? 20, opts?.path);
+  async getLog(collectionId, opts) {
+    const rows = await listCommits(collectionId, {
+      limit: opts?.limit ?? 20,
+      path: opts?.path,
+    });
+    return rows.map<LogCommit>((r) => ({
+      hash: r.id,
+      message: r.message,
+      author: r.author,
+      timestamp: r.timestamp.toISOString(),
+      files: r.files,
+    }));
   },
 
-  async getDiff(collectionPath, opts) {
-    const cfs = new LocalFS(collectionPath);
-    const head = await readHeadSafe(cfs);
+  async getDiff(collectionId, opts) {
+    const head = await getHead(
+      db as unknown as Parameters<Parameters<typeof db.transaction>[0]>[0],
+      collectionId
+    );
     if (!head) {
       throw new AppError(ErrorCode.NOT_FOUND, "Collection is empty");
     }
 
     const toId = opts?.to ?? head;
-    let fromId = opts?.from;
 
-    if (!fromId) {
-      try {
-        const toCommit = await readCommit(cfs, toId);
-        fromId = toCommit.parent ?? undefined;
-      } catch {
-        throw new AppError(ErrorCode.NOT_FOUND, `Commit '${toId}' not found`);
-      }
-    }
+    const fileRows = await db
+      .select({
+        path: schema.artiCommitFiles.path,
+        diffText: schema.artiCommitFiles.diffText,
+        addedLines: schema.artiCommitFiles.addedLines,
+        removedLines: schema.artiCommitFiles.removedLines,
+      })
+      .from(schema.artiCommitFiles)
+      .where(eq(schema.artiCommitFiles.commitId, toId));
 
-    // Get files changed in the target commit
-    const toCommit = await readCommit(cfs, toId);
-    const filesToDiff = opts?.path
-      ? toCommit.files.filter((f) => f.path === opts.path)
-      : toCommit.files;
+    const filtered = opts?.path
+      ? fileRows.filter((r) => r.path === opts.path)
+      : fileRows;
 
-    const diffLines: string[] = [];
     let additions = 0;
     let deletions = 0;
-
-    for (const file of filesToDiff) {
-      if (file.action === "create") {
-        // New file: diff against empty
-        let content: string;
-        try {
-          content = await cfs.readFile(file.path);
-        } catch {
-          continue;
-        }
-        const lines = content.split("\n");
-        diffLines.push(`--- /dev/null`, `+++ b/${file.path}`);
-        diffLines.push(`@@ -0,0 +1,${lines.length} @@`);
-        for (const l of lines) {
-          diffLines.push(`+${l}`);
-          additions++;
-        }
-      } else if (file.action === "delete") {
-        diffLines.push(`--- a/${file.path}`, `+++ /dev/null`);
-        diffLines.push(`@@ deleted @@`);
-        deletions++;
-      } else {
-        // Update: read current content and reconstruct old from weave
-        // For v1, we show the current content as added (simplified diff)
-        let content: string;
-        try {
-          content = await cfs.readFile(file.path);
-        } catch {
-          continue;
-        }
-
-        // Try to reconstruct previous content from weave history
-        // For now, show a simplified diff based on the weave
-        const wp = weavePath(file.path);
-        try {
-          const weaveState = await cfs.readFile(wp);
-          const current = currentLines(weaveState);
-          // The "old" content would require reading the weave at a previous commit
-          // For v1, we just show the current content with a note
-          diffLines.push(`--- a/${file.path}`, `+++ b/${file.path}`);
-          const contentLines = content.split("\n");
-          diffLines.push(`@@ -1,? +1,${contentLines.length} @@`);
-          for (const l of contentLines) {
-            diffLines.push(` ${l}`);
-          }
-        } catch {
-          diffLines.push(`--- a/${file.path}`, `+++ b/${file.path}`);
-          diffLines.push(`@@ modified @@`);
-        }
-      }
+    const parts: string[] = [];
+    for (const r of filtered) {
+      additions += r.addedLines;
+      deletions += r.removedLines;
+      if (r.diffText) parts.push(r.diffText);
     }
 
-    return { diff: diffLines.join("\n"), stats: { additions, deletions } };
+    return { diff: parts.join("\n"), stats: { additions, deletions } };
   },
 
-  async getBlame(collectionPath, filePath) {
+  async getBlame(collectionId, filePath) {
     validatePath(filePath);
-    const cfs = new LocalFS(collectionPath);
-
-    // v1: simplified blame — attribute all lines to the most recent commit that touched this file
-    let content: string;
-    try {
-      content = await cfs.readFile(filePath);
-    } catch {
+    const snap = await loadSnapshot(
+      db as unknown as Parameters<Parameters<typeof db.transaction>[0]>[0],
+      collectionId,
+      filePath
+    );
+    if (!snap || snap.deletedAt !== null) {
       throw new AppError(ErrorCode.NOT_FOUND, `File '${filePath}' not found`);
     }
 
-    // Walk commit chain to find commits that touched this file
-    const commits = await walkCommitChain(cfs, 100, filePath);
-    const lastCommit = commits[0];
+    const weave = deserializeWeave(snap.weaveState);
+    const alive = weave.filter((l) => l.count % 2 === 1);
+    const aliveIds = alive.map((l) => l.lineId);
+    const attribMap = await getInsertAttributions(collectionId, filePath, aliveIds);
 
-    const lines = content.split("\n");
-    if (lines.length > 0 && lines[lines.length - 1] === "") {
-      lines.pop();
-    }
-
-    return lines.map((text, i) => ({
-      line: i + 1,
-      text,
-      author: lastCommit?.author ?? "unknown",
-      commit: lastCommit?.hash ?? "",
-      timestamp: lastCommit?.timestamp ?? new Date().toISOString(),
-    }));
+    return alive.map<BlameLine>((l, i) => {
+      const a = attribMap.get(l.lineId);
+      return {
+        line: i + 1,
+        text: l.text,
+        author: a?.author ?? "unknown",
+        commit: a?.commitId ?? "",
+        timestamp: a?.timestamp?.toISOString() ?? new Date().toISOString(),
+      };
+    });
   },
 
-  async fileExists(collectionPath, filePath) {
+  async fileExists(collectionId, filePath) {
     validatePath(filePath);
-    const cfs = new LocalFS(collectionPath);
-    return cfs.exists(filePath);
+    const snap = await loadSnapshot(
+      db as unknown as Parameters<Parameters<typeof db.transaction>[0]>[0],
+      collectionId,
+      filePath
+    );
+    return snap !== null && snap.deletedAt === null;
   },
 };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import {
   ChevronRight,
@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { FileIcon } from "@/lib/file-icon";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useCollectionRealtime } from "@/lib/realtime/hooks";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
@@ -118,6 +119,23 @@ export function SidebarFileTree({
 
     fetchDir("").then(() => setRootLoading(false));
   }, [owner, collection, fetchDir]);
+
+  // Realtime: when the collection changes, refetch every currently-expanded directory
+  const treeRef = useRef(tree);
+  useEffect(() => {
+    treeRef.current = tree;
+  });
+
+  const refreshExpanded = useCallback(() => {
+    const expanded = Object.keys(treeRef.current).filter(
+      (k) => treeRef.current[k]?.expanded
+    );
+    for (const dirPath of expanded) {
+      fetchDir(dirPath);
+    }
+  }, [fetchDir]);
+
+  useCollectionRealtime({ owner, name: collection }, refreshExpanded);
 
   // Auto-expand directories to match current path (without resetting tree)
   useEffect(() => {

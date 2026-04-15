@@ -1,0 +1,1 @@
+ALTER TABLE "arti_file_snapshot" ADD COLUMN "weave_state" text NOT NULL;

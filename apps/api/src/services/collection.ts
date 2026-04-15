@@ -8,7 +8,6 @@ export interface ResolvedCollection {
   ownerUsername: string;
   collectionName: string;
   visibility: "private" | "public";
-  storagePath: string;
 }
 
 export async function resolveCollection(
@@ -22,7 +21,6 @@ export async function resolveCollection(
       ownerUsername: schema.users.username,
       collectionName: schema.collections.name,
       visibility: schema.collections.visibility,
-      storagePath: schema.collections.storagePath,
     })
     .from(schema.collections)
     .innerJoin(schema.users, eq(schema.users.id, schema.collections.ownerId))

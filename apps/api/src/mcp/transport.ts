@@ -8,9 +8,6 @@ import { db, schema } from "../db/index.js";
 
 export const mcp = new Hono();
 
-// Map of sessionId → transport
-const transports = new Map<string, WebStandardStreamableHTTPServerTransport>();
-
 async function resolveApiKey(rawKey: string) {
   const keyHash = crypto.createHash("sha256").update(rawKey).digest("hex");
   const [row] = await db
@@ -67,82 +64,49 @@ async function resolveAuthInfo(req: Request): Promise<{ authInfo?: AuthInfo }> {
   };
 }
 
-// POST /mcp — JSON-RPC messages
+// Stateless MCP — each POST spins up a fresh transport + server, returns JSON, no session.
+// Works under any serverless runtime (Vercel Functions / Workers / Lambda).
 mcp.post("/", async (c) => {
   const { authInfo } = await resolveAuthInfo(c.req.raw);
+  const transport = new WebStandardStreamableHTTPServerTransport({
+    sessionIdGenerator: undefined,
+    enableJsonResponse: true,
+  });
+  const server = createMcpServer();
+  await server.connect(transport);
 
-  // Check if this is an initialization request (no session ID yet)
-  const sessionId = c.req.header("mcp-session-id");
+  try {
+    return await transport.handleRequest(c.req.raw, { authInfo });
+  } finally {
+    // Best-effort cleanup; transport holds no long-lived state in stateless mode.
+    transport.close().catch(() => {});
+    server.close().catch(() => {});
+  }
+});
 
-  if (!sessionId) {
-    // New session — create transport and server
-    const transport = new WebStandardStreamableHTTPServerTransport({
-      sessionIdGenerator: () => crypto.randomUUID(),
-      onsessioninitialized: (id) => {
-        transports.set(id, transport);
+// Stateless mode: no server→client stream and no session lifecycle.
+mcp.get("/", (c) =>
+  c.json(
+    {
+      jsonrpc: "2.0",
+      error: {
+        code: -32000,
+        message: "Server-initiated streams are not supported in stateless mode",
       },
-      onsessionclosed: (id) => {
-        transports.delete(id);
+    },
+    405,
+  ),
+);
+
+mcp.delete("/", (c) =>
+  c.json(
+    {
+      jsonrpc: "2.0",
+      error: {
+        code: -32000,
+        message: "Session termination not applicable in stateless mode",
       },
-    });
-
-    const server = createMcpServer();
-    await server.connect(transport);
-
-    return transport.handleRequest(c.req.raw, { authInfo });
-  }
-
-  // Existing session
-  const transport = transports.get(sessionId);
-  if (!transport) {
-    return c.json(
-      { jsonrpc: "2.0", error: { code: -32000, message: "Session not found" } },
-      404
-    );
-  }
-
-  return transport.handleRequest(c.req.raw, { authInfo });
-});
-
-// GET /mcp — SSE stream
-mcp.get("/", async (c) => {
-  const sessionId = c.req.header("mcp-session-id");
-  if (!sessionId) {
-    return c.json(
-      { jsonrpc: "2.0", error: { code: -32000, message: "Session ID required" } },
-      400
-    );
-  }
-
-  const transport = transports.get(sessionId);
-  if (!transport) {
-    return c.json(
-      { jsonrpc: "2.0", error: { code: -32000, message: "Session not found" } },
-      404
-    );
-  }
-
-  const { authInfo } = await resolveAuthInfo(c.req.raw);
-  return transport.handleRequest(c.req.raw, { authInfo });
-});
-
-// DELETE /mcp — close session
-mcp.delete("/", async (c) => {
-  const sessionId = c.req.header("mcp-session-id");
-  if (!sessionId) {
-    return c.json(
-      { jsonrpc: "2.0", error: { code: -32000, message: "Session ID required" } },
-      400
-    );
-  }
-
-  const transport = transports.get(sessionId);
-  if (!transport) {
-    return c.json(
-      { jsonrpc: "2.0", error: { code: -32000, message: "Session not found" } },
-      404
-    );
-  }
-
-  return transport.handleRequest(c.req.raw);
-});
+    },
+    405,
+  ),
+);

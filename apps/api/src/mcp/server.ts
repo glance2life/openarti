@@ -46,7 +46,7 @@ export function createMcpServer() {
       const user = getUser(extra);
       const resolved = await resolveAndCheckRead(args, user);
       
-      const entries = await engine.listFiles(resolved.storagePath, args.path);
+      const entries = await engine.listFiles(resolved.collectionId, args.path);
       return { content: [{ type: "text" as const, text: JSON.stringify(entries, null, 2) }] };
     }
   );
@@ -70,7 +70,7 @@ export function createMcpServer() {
       const user = getUser(extra);
       const resolved = await resolveAndCheckRead(args, user);
       
-      const result = await engine.readFile(resolved.storagePath, args.path, {
+      const result = await engine.readFile(resolved.collectionId, args.path, {
         ref: args.ref,
         offset: args.offset,
         limit: args.limit,
@@ -96,7 +96,7 @@ export function createMcpServer() {
       const user = getUser(extra);
       const resolved = await resolveAndCheckEdit(args, user);
       
-      const result = await engine.writeFile(resolved.storagePath, args.path, args.content, {
+      const result = await engine.writeFile(resolved.collectionId, args.path, args.content, {
         message: args.message,
         author: `${user.name} <${user.email}>`,
       });
@@ -128,7 +128,7 @@ export function createMcpServer() {
       const resolved = await resolveAndCheckEdit(args, user);
       
       const result = await engine.editFile(
-        resolved.storagePath,
+        resolved.collectionId,
         args.path,
         [{ old_string: args.old_string, new_string: args.new_string }],
         {
@@ -162,7 +162,7 @@ export function createMcpServer() {
       const user = getUser(extra);
       const resolved = await resolveAndCheckEdit(args, user);
       
-      const result = await engine.removeFile(resolved.storagePath, args.path, {
+      const result = await engine.removeFile(resolved.collectionId, args.path, {
         message: args.message,
         author: `${user.name} <${user.email}>`,
       });
@@ -191,7 +191,7 @@ export function createMcpServer() {
       const user = getUser(extra);
       const resolved = await resolveAndCheckRead(args, user);
       
-      const result = await engine.grepFiles(resolved.storagePath, args.pattern, {
+      const result = await engine.grepFiles(resolved.collectionId, args.pattern, {
         glob: args.glob,
         context: args.context,
         ignoreCase: args.ignore_case,
@@ -218,7 +218,7 @@ export function createMcpServer() {
       const user = getUser(extra);
       const resolved = await resolveAndCheckRead(args, user);
       
-      const files = await engine.globFiles(resolved.storagePath, args.pattern);
+      const files = await engine.globFiles(resolved.collectionId, args.pattern);
       return { content: [{ type: "text" as const, text: JSON.stringify(files, null, 2) }] };
     }
   );
@@ -240,7 +240,7 @@ export function createMcpServer() {
       const user = getUser(extra);
       const resolved = await resolveAndCheckRead(args, user);
       
-      const commits = await engine.getLog(resolved.storagePath, {
+      const commits = await engine.getLog(resolved.collectionId, {
         path: args.path,
         limit: args.limit,
       });
@@ -266,7 +266,7 @@ export function createMcpServer() {
       const user = getUser(extra);
       const resolved = await resolveAndCheckRead(args, user);
       
-      const result = await engine.getDiff(resolved.storagePath, {
+      const result = await engine.getDiff(resolved.collectionId, {
         path: args.path,
         from: args.from,
         to: args.to,
@@ -293,7 +293,7 @@ export function createMcpServer() {
       const user = getUser(extra);
       const resolved = await resolveAndCheckRead(args, user);
       
-      const lines = await engine.getBlame(resolved.storagePath, args.path);
+      const lines = await engine.getBlame(resolved.collectionId, args.path);
       return { content: [{ type: "text" as const, text: JSON.stringify(lines, null, 2) }] };
     }
   );

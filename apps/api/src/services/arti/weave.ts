@@ -241,7 +241,7 @@ export function mergeStates(
 
 // ---- Diff ----
 
-type Opcode = ["equal" | "delete" | "insert" | "replace", number, number, number, number];
+export type Opcode = ["equal" | "delete" | "insert" | "replace", number, number, number, number];
 
 function lcs(a: string[], b: string[]): [number, number][] {
   const m = a.length;
@@ -270,7 +270,7 @@ function lcs(a: string[], b: string[]): [number, number][] {
   return result;
 }
 
-function getOpcodes(a: string[], b: string[]): Opcode[] {
+export function getOpcodes(a: string[], b: string[]): Opcode[] {
   const matching = lcs(a, b);
   const opcodes: Opcode[] = [];
   let ai = 0;
@@ -292,7 +292,7 @@ function getOpcodes(a: string[], b: string[]): Opcode[] {
   return opcodes;
 }
 
-function getDeletionsAndInsertions(
+export function getDeletionsAndInsertions(
   lines1: string[],
   lines2: string[]
 ): { deletions: number[]; insertions: [number, string[]][] } {

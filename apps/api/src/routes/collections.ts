@@ -1,17 +1,13 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { eq, and } from "drizzle-orm";
-import path from "node:path";
+import { eq, and, desc } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
 import { engine } from "../services/storage.js";
 import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth.js";
 import type { AuthUser } from "../middleware/auth.js";
-import { resolveCollection, checkOwner } from "../services/collection.js";
+import { resolveCollection, checkCollectionAccess, checkOwner } from "../services/collection.js";
 import { AppError, ErrorCode } from "@openarti/shared";
-
-import os from "node:os";
-const STORAGE_DIR = (process.env.STORAGE_DIR || path.join(os.homedir(), ".openarti", "storage")).replace(/^~/, os.homedir());
 
 const collections = new Hono();
 
@@ -50,9 +46,6 @@ collections.post(
       );
     }
 
-    const storagePath = path.resolve(STORAGE_DIR, user.username, body.name);
-    await engine.init(storagePath);
-
     const [collection] = await db
       .insert(schema.collections)
       .values({
@@ -60,7 +53,6 @@ collections.post(
         name: body.name,
         description: body.description ?? "",
         visibility: body.visibility ?? "private",
-        storagePath,
       })
       .returning();
 
@@ -86,14 +78,14 @@ collections.get(
     const user = c.get("user");
 
     const ownRows = await db
-      .select({ name: schema.collections.name, storagePath: schema.collections.storagePath })
+      .select({ id: schema.collections.id, name: schema.collections.name })
       .from(schema.collections)
       .where(eq(schema.collections.ownerId, user.id));
 
     const sharedRows = await db
       .select({
+        id: schema.collections.id,
         name: schema.collections.name,
-        storagePath: schema.collections.storagePath,
         ownerUsername: schema.users.username,
       })
       .from(schema.collectionAccess)
@@ -102,13 +94,13 @@ collections.get(
       .where(eq(schema.collectionAccess.userId, user.id));
 
     const allCollections = [
-      ...ownRows.map((r) => ({ owner: user.username, name: r.name, storagePath: r.storagePath })),
-      ...sharedRows.map((r) => ({ owner: r.ownerUsername, name: r.name, storagePath: r.storagePath })),
+      ...ownRows.map((r) => ({ owner: user.username, name: r.name, id: r.id })),
+      ...sharedRows.map((r) => ({ owner: r.ownerUsername, name: r.name, id: r.id })),
     ];
 
     const results = await Promise.allSettled(
       allCollections.map(async (col) => {
-        const commits = await engine.getLog(col.storagePath, { limit: 10 });
+        const commits = await engine.getLog(col.id, { limit: 10 });
         const files: { owner: string; collection: string; path: string; timestamp: string }[] = [];
         for (const commit of commits) {
           for (const file of commit.files) {
@@ -159,7 +151,6 @@ collections.post(
       .select({
         id: schema.collections.id,
         name: schema.collections.name,
-        storagePath: schema.collections.storagePath,
       })
       .from(schema.collections)
       .where(eq(schema.collections.ownerId, user.id));
@@ -168,7 +159,6 @@ collections.post(
       .select({
         id: schema.collections.id,
         name: schema.collections.name,
-        storagePath: schema.collections.storagePath,
         ownerUsername: schema.users.username,
       })
       .from(schema.collectionAccess)
@@ -177,13 +167,13 @@ collections.post(
       .where(eq(schema.collectionAccess.userId, user.id));
 
     const allCollections = [
-      ...ownRows.map((r) => ({ id: r.id, name: r.name, owner: user.username, storagePath: r.storagePath })),
-      ...sharedRows.map((r) => ({ id: r.id, name: r.name, owner: r.ownerUsername, storagePath: r.storagePath })),
+      ...ownRows.map((r) => ({ id: r.id, name: r.name, owner: user.username })),
+      ...sharedRows.map((r) => ({ id: r.id, name: r.name, owner: r.ownerUsername })),
     ];
 
     const results = await Promise.allSettled(
       allCollections.map(async (col) => {
-        const files = await engine.globFiles(col.storagePath, pattern);
+        const files = await engine.globFiles(col.id, pattern);
         return { collection: { id: col.id, name: col.name, owner: col.owner }, files };
       })
     );
@@ -312,6 +302,69 @@ collections.get(
       name: resolved.collectionName,
       owner: resolved.ownerUsername,
       visibility: resolved.visibility,
+    });
+  }
+);
+
+// Head — cheap change-detection endpoint for realtime polling.
+// Without ?path: latest commitId on the collection.
+// With ?path: lastCommitId + deleted flag for a specific file snapshot.
+collections.get(
+  "/:owner/:collection/head",
+  optionalAuthMiddleware,
+  async (c) => {
+    const { owner, collection: collectionName } = c.req.param();
+    const path = c.req.query("path");
+    const resolved = await resolveCollection(owner, collectionName);
+
+    if (resolved.visibility === "private") {
+      const user = c.get("user") as AuthUser | undefined;
+      if (!user) {
+        throw new AppError(ErrorCode.UNAUTHORIZED, "Authentication required for private collections");
+      }
+      await checkCollectionAccess(user.id, resolved.collectionId, resolved.ownerId, "read");
+    }
+
+    if (path) {
+      const [row] = await db
+        .select({
+          commitId: schema.artiFileSnapshot.lastCommitId,
+          updatedAt: schema.artiFileSnapshot.updatedAt,
+          deletedAt: schema.artiFileSnapshot.deletedAt,
+        })
+        .from(schema.artiFileSnapshot)
+        .where(
+          and(
+            eq(schema.artiFileSnapshot.collectionId, resolved.collectionId),
+            eq(schema.artiFileSnapshot.path, path)
+          )
+        )
+        .limit(1);
+
+      if (!row) {
+        throw new AppError(ErrorCode.NOT_FOUND, `File '${path}' not found`);
+      }
+
+      return c.json({
+        commitId: row.commitId,
+        updatedAt: row.updatedAt.toISOString(),
+        deleted: row.deletedAt !== null,
+      });
+    }
+
+    const [row] = await db
+      .select({
+        commitId: schema.artiCommits.id,
+        timestamp: schema.artiCommits.timestamp,
+      })
+      .from(schema.artiCommits)
+      .where(eq(schema.artiCommits.collectionId, resolved.collectionId))
+      .orderBy(desc(schema.artiCommits.seq))
+      .limit(1);
+
+    return c.json({
+      commitId: row?.commitId ?? null,
+      updatedAt: row?.timestamp.toISOString() ?? null,
     });
   }
 );

@@ -3,6 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { resolveCollection, checkCollectionAccess } from "../services/collection.js";
 import { engine } from "../services/storage.js";
+import { notifyCollection } from "../services/realtime.js";
 import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth.js";
 import type { AuthUser } from "../middleware/auth.js";
 import { AppError, ErrorCode } from "@openarti/shared";
@@ -98,7 +99,7 @@ tools.post(
     const body = c.req.valid("json");
     const resolved = await resolveAndCheckRead(c);
 
-    const result = await engine.readFile(resolved.storagePath, body.path, {
+    const result = await engine.readFile(resolved.collectionId, body.path, {
       ref: body.ref,
       offset: body.offset,
       limit: body.limit,
@@ -125,10 +126,12 @@ tools.post(
     const resolved = await resolveCollection(owner, collectionName);
     await checkCollectionAccess(user.id, resolved.collectionId, resolved.ownerId, "edit");
 
-    const result = await engine.writeFile(resolved.storagePath, body.path, body.content, {
+    const result = await engine.writeFile(resolved.collectionId, body.path, body.content, {
       message: body.message,
       author: `${user.name} <${user.email}>`,
     });
+
+    await notifyCollection(resolved.collectionId, [body.path]);
 
     return c.json({
       path: body.path,
@@ -163,11 +166,13 @@ tools.post(
       );
     }
 
-    const result = await engine.editFile(resolved.storagePath, body.path, edits, {
+    const result = await engine.editFile(resolved.collectionId, body.path, edits, {
       replaceAll: body.replace_all,
       message: body.message,
       author: `${user.name} <${user.email}>`,
     });
+
+    await notifyCollection(resolved.collectionId, [body.path]);
 
     return c.json({
       path: body.path,
@@ -186,7 +191,7 @@ tools.post(
     const body = c.req.valid("json");
     const resolved = await resolveAndCheckRead(c);
 
-    const entries = await engine.listFiles(resolved.storagePath, body.path);
+    const entries = await engine.listFiles(resolved.collectionId, body.path);
     return c.json({ entries });
   }
 );
@@ -203,10 +208,12 @@ tools.post(
     const resolved = await resolveCollection(owner, collectionName);
     await checkCollectionAccess(user.id, resolved.collectionId, resolved.ownerId, "edit");
 
-    const result = await engine.removeFile(resolved.storagePath, body.path, {
+    const result = await engine.removeFile(resolved.collectionId, body.path, {
       message: body.message,
       author: `${user.name} <${user.email}>`,
     });
+
+    await notifyCollection(resolved.collectionId, [body.path]);
 
     return c.json({ path: body.path, commit: result.commit });
   }
@@ -221,7 +228,7 @@ tools.post(
     const body = c.req.valid("json");
     const resolved = await resolveAndCheckRead(c);
 
-    const result = await engine.grepFiles(resolved.storagePath, body.pattern, {
+    const result = await engine.grepFiles(resolved.collectionId, body.pattern, {
       glob: body.glob,
       context: body.context,
       ignoreCase: body.ignore_case,
@@ -240,7 +247,7 @@ tools.post(
     const body = c.req.valid("json");
     const resolved = await resolveAndCheckRead(c);
 
-    const files = await engine.globFiles(resolved.storagePath, body.pattern);
+    const files = await engine.globFiles(resolved.collectionId, body.pattern);
     return c.json({ files });
   }
 );
@@ -254,7 +261,7 @@ tools.post(
     const body = c.req.valid("json");
     const resolved = await resolveAndCheckRead(c);
 
-    const commits = await engine.getLog(resolved.storagePath, {
+    const commits = await engine.getLog(resolved.collectionId, {
       path: body.path,
       limit: body.limit,
     });
@@ -271,7 +278,7 @@ tools.post(
     const body = c.req.valid("json");
     const resolved = await resolveAndCheckRead(c);
 
-    const result = await engine.getDiff(resolved.storagePath, {
+    const result = await engine.getDiff(resolved.collectionId, {
       path: body.path,
       from: body.from,
       to: body.to,
@@ -294,7 +301,7 @@ tools.post(
     const body = c.req.valid("json");
     const resolved = await resolveAndCheckRead(c);
 
-    const lines = await engine.getBlame(resolved.storagePath, body.path);
+    const lines = await engine.getBlame(resolved.collectionId, body.path);
     return c.json({ path: body.path, lines });
   }
 );

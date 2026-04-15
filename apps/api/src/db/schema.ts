@@ -1,4 +1,11 @@
-import { pgTable, text, timestamp, boolean, integer, index, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, integer, index, pgEnum, uniqueIndex, bigserial, bigint, primaryKey, customType } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+
+const tsvector = customType<{ data: string; driverData: string }>({
+  dataType() {
+    return "tsvector";
+  },
+});
 
 // ---- Enums ----
 
@@ -96,7 +103,6 @@ export const collections = pgTable(
     name: text("name").notNull(),
     description: text("description").default(""),
     visibility: visibilityEnum("visibility").notNull().default("private"),
-    storagePath: text("storage_path").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("collections_owner_name").on(t.ownerId, t.name)]
@@ -213,3 +219,104 @@ export const oauthCodes = pgTable("oauth_codes", {
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   used: boolean("used").notNull().default(false),
 });
+
+// ---- Arti storage (self-built commit/weave layer, backed by Postgres) ----
+
+export const artiCommits = pgTable(
+  "arti_commits",
+  {
+    id: text("id").primaryKey(),
+    collectionId: text("collection_id")
+      .notNull()
+      .references(() => collections.id, { onDelete: "cascade" }),
+    parentId: text("parent_id"),
+    author: text("author").notNull(),
+    message: text("message").notNull().default(""),
+    timestamp: timestamp("timestamp", { withTimezone: true }).notNull().defaultNow(),
+    seq: bigserial("seq", { mode: "number" }).notNull(),
+  },
+  (t) => [
+    index("arti_commits_collection_seq").on(t.collectionId, t.seq.desc()),
+    index("arti_commits_parent").on(t.parentId),
+  ]
+);
+
+export const artiRefs = pgTable(
+  "arti_refs",
+  {
+    collectionId: text("collection_id")
+      .notNull()
+      .references(() => collections.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    commitId: text("commit_id")
+      .notNull()
+      .references(() => artiCommits.id, { onDelete: "cascade" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.collectionId, t.name] })]
+);
+
+export const artiCommitFiles = pgTable(
+  "arti_commit_files",
+  {
+    commitId: text("commit_id")
+      .notNull()
+      .references(() => artiCommits.id, { onDelete: "cascade" }),
+    collectionId: text("collection_id").notNull(),
+    path: text("path").notNull(),
+    action: text("action").notNull(), // 'create' | 'update' | 'delete'
+    diffText: text("diff_text").notNull().default(""), // unified diff for this file in this commit
+    addedLines: integer("added_lines").notNull().default(0),
+    removedLines: integer("removed_lines").notNull().default(0),
+  },
+  (t) => [
+    primaryKey({ columns: [t.commitId, t.path] }),
+    index("arti_commit_files_col_path").on(t.collectionId, t.path, t.commitId),
+  ]
+);
+
+export const artiWeaveOps = pgTable(
+  "arti_weave_ops",
+  {
+    lineId: text("line_id").notNull(),
+    commitId: text("commit_id")
+      .notNull()
+      .references(() => artiCommits.id, { onDelete: "cascade" }),
+    collectionId: text("collection_id").notNull(),
+    path: text("path").notNull(),
+    opType: text("op_type").notNull(), // 'insert' | 'toggle'
+    text: text("text"),
+    depth: integer("depth"),
+    anchoredRight: boolean("anchored_right"),
+    insertSeq: bigint("insert_seq", { mode: "number" }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.lineId, t.commitId] }),
+    index("arti_weave_ops_col_path_commit").on(t.collectionId, t.path, t.commitId),
+    index("arti_weave_ops_line").on(t.lineId),
+  ]
+);
+
+export const artiFileSnapshot = pgTable(
+  "arti_file_snapshot",
+  {
+    collectionId: text("collection_id")
+      .notNull()
+      .references(() => collections.id, { onDelete: "cascade" }),
+    path: text("path").notNull(),
+    content: text("content").notNull(),
+    weaveState: text("weave_state").notNull(), // JSON: [[lineId,text,depth,anchoredRight,count], ...] in weave order
+    lineCount: integer("line_count").notNull(),
+    lastCommitId: text("last_commit_id")
+      .notNull()
+      .references(() => artiCommits.id, { onDelete: "cascade" }),
+    tsv: tsvector("tsv").generatedAlwaysAs(sql`to_tsvector('simple', "content")`),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }), // non-null = tombstoned; weave kept for resurrect
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.collectionId, t.path] }),
+    index("arti_file_snapshot_tsv").using("gin", t.tsv),
+    index("arti_file_snapshot_col_path_pattern").on(t.collectionId, t.path),
+  ]
+);
