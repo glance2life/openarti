@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
 import { auth } from "../auth.js";
 import { pickUsername } from "../services/username.js";
@@ -28,6 +28,66 @@ bootstrap.get("/admin", async (c) => {
   if (!adminEmail) return c.json({ available: false });
   const exists = await adminUserExists(adminEmail);
   return c.json({ available: !exists });
+});
+
+// Diagnostic: times each pre-signup step and reports which one stalls.
+// Accessible without auth on purpose — only meaningful during bootstrap.
+bootstrap.get("/diag", async (c) => {
+  const t0 = Date.now();
+  const timings: Record<string, number> = {};
+  const mark = (label: string) => {
+    timings[label] = Date.now() - t0;
+  };
+  const withTimeout = <T,>(p: Promise<T>, ms: number, label: string) =>
+    Promise.race<T>([
+      p,
+      new Promise<T>((_, rej) =>
+        setTimeout(() => rej(new Error(`${label} timed out after ${ms}ms`)), ms)
+      ),
+    ]);
+
+  try {
+    const adminEmail = getAdminEmail();
+    mark("read_env");
+    if (!adminEmail) {
+      return c.json({ ok: true, adminEmailSet: false, timings });
+    }
+
+    // Bare DB ping.
+    await withTimeout(db.execute(sql`select 1`), 5000, "select_1");
+    mark("select_1");
+
+    const exists = await withTimeout(
+      adminUserExists(adminEmail),
+      5000,
+      "adminUserExists"
+    );
+    mark("adminUserExists");
+
+    const username = await withTimeout(
+      pickUsername(adminEmail),
+      5000,
+      "pickUsername"
+    );
+    mark("pickUsername");
+
+    return c.json({
+      ok: true,
+      adminEmailSet: true,
+      adminExists: exists,
+      username,
+      timings,
+      totalMs: Date.now() - t0,
+    });
+  } catch (err) {
+    return c.json({
+      ok: false,
+      error: (err as Error).message,
+      stack: (err as Error).stack?.split("\n").slice(0, 5),
+      timings,
+      totalMs: Date.now() - t0,
+    });
+  }
 });
 
 bootstrap.post(
