@@ -2,10 +2,8 @@ import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
-import { eq } from "drizzle-orm";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { db } from "./db/index.js";
-import * as schema from "./db/schema.js";
 
 // Per-request flag: set by the invitation redeem flow to allow signup even
 // when ALLOW_REGISTRATION is false.
@@ -93,19 +91,13 @@ export const auth = betterAuth({
             message: "Registration is disabled",
           });
         },
-        after: async (user) => {
-          const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
-          if (adminEmail && user.email?.toLowerCase() === adminEmail) {
-            try {
-              await db
-                .update(schema.users)
-                .set({ role: "admin" })
-                .where(eq(schema.users.id, user.id));
-            } catch (err) {
-              console.error("Failed to promote admin user:", user.id, err);
-            }
-          }
-        },
+        // Admin promotion used to run here, but better-auth's user.create
+        // callback fires inside the same transaction as the INSERT. Running
+        // a second UPDATE against the same row via the global `db` pool
+        // deadlocked — the new connection waited on the row lock held by
+        // the outer transaction, the transaction waited for this callback
+        // to return. Promotion now happens in the /bootstrap/admin route
+        // after signUpEmail resolves, when the transaction has committed.
       },
     },
   },
