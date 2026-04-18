@@ -26,8 +26,8 @@ const allowedOrigins = (process.env.WEB_ORIGIN || "http://localhost:3000")
   .map((s) => s.trim().replace(/\/$/, ""))
   .filter(Boolean);
 
-const matchAllowedOrigin = (origin: string) =>
-  allowedOrigins.includes(origin) ? origin : null;
+const matchAllowedOrigin = (origin: string | undefined) =>
+  origin && allowedOrigins.includes(origin) ? origin : null;
 
 // MCP and OAuth endpoints need permissive CORS (MCP clients are not browsers)
 app.use(
@@ -59,7 +59,10 @@ app.use(
 );
 app.onError(errorHandler);
 
-// Health check
+// Root + health — respond explicitly so the Vercel function never falls
+// through to Hono's notFound on "/" (which was surfacing as
+// FUNCTION_INVOCATION_FAILED on api.openarti.com).
+app.get("/", (c) => c.json({ name: "openarti-api", status: "ok" }));
 app.get("/health", (c) => c.json({ status: "ok" }));
 
 // Auth config (public — tells web UI what's available)
