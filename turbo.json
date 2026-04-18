@@ -3,7 +3,40 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**"]
+      "outputs": ["dist/**", ".next/**"],
+      "env": [
+        "NODE_ENV",
+        "DATABASE_URL",
+        "PG_PREPARE",
+        "OPENARTI_API_URL",
+        "NEXT_PUBLIC_API_URL",
+        "NEXT_PUBLIC_SUPABASE_URL",
+        "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+        "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+        "NEXT_PUBLIC_REALTIME_DRIVER",
+        "NEXT_PUBLIC_REALTIME_POLL_INTERVAL_MS"
+      ],
+      "passThroughEnv": [
+        "PORT",
+        "STORAGE_DIR",
+        "BETTER_AUTH_URL",
+        "BETTER_AUTH_SECRET",
+        "WEB_ORIGIN",
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_SECRET",
+        "OIDC_ISSUER",
+        "OIDC_CLIENT_ID",
+        "OIDC_CLIENT_SECRET",
+        "OIDC_LABEL",
+        "ALLOW_REGISTRATION",
+        "ADMIN_EMAIL",
+        "ADMIN_USERNAME",
+        "ADMIN_PASSWORD",
+        "SUPABASE_URL",
+        "SUPABASE_SECRET_KEY",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_PUBLISHABLE_KEY"
+      ]
     },
     "dev": {
       "cache": false,
