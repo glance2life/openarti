@@ -6,10 +6,14 @@ import { AppError } from "@openarti/shared";
 // the error unwinds past it into onError — so error responses would otherwise
 // go back without Access-Control-Allow-Origin and the browser reports them
 // as generic "CORS error" instead of the real status + body.
+const allowedOrigins = (process.env.WEB_ORIGIN || "http://localhost:3000")
+  .split(",")
+  .map((s) => s.trim().replace(/\/$/, ""))
+  .filter(Boolean);
+
 function applyCorsHeaders(req: Request, res: Response): Response {
   const origin = req.headers.get("origin");
-  const allowed = process.env.WEB_ORIGIN || "http://localhost:3000";
-  if (origin && origin === allowed) {
+  if (origin && allowedOrigins.includes(origin)) {
     res.headers.set("Access-Control-Allow-Origin", origin);
     res.headers.set("Access-Control-Allow-Credentials", "true");
     res.headers.append("Vary", "Origin");

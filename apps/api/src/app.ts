@@ -18,6 +18,17 @@ import { errorHandler } from "./middleware/error.js";
 
 const app = new Hono();
 
+// WEB_ORIGIN is comma-separated so the API can serve multiple frontends
+// (e.g. apex + www). Strip whitespace and trailing slashes so minor
+// misconfigurations don't silently drop Access-Control-Allow-Origin.
+const allowedOrigins = (process.env.WEB_ORIGIN || "http://localhost:3000")
+  .split(",")
+  .map((s) => s.trim().replace(/\/$/, ""))
+  .filter(Boolean);
+
+const matchAllowedOrigin = (origin: string) =>
+  allowedOrigins.includes(origin) ? origin : null;
+
 // MCP and OAuth endpoints need permissive CORS (MCP clients are not browsers)
 app.use(
   "/mcp/*",
@@ -30,7 +41,7 @@ app.use(
 app.use(
   "/oauth/*",
   cors({
-    origin: [process.env.WEB_ORIGIN || "http://localhost:3000"],
+    origin: matchAllowedOrigin,
     credentials: true,
   })
 );
@@ -42,7 +53,7 @@ app.use(
 app.use(
   "*",
   cors({
-    origin: process.env.WEB_ORIGIN || "http://localhost:3000",
+    origin: matchAllowedOrigin,
     credentials: true,
   })
 );
