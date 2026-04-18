@@ -3,7 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { eq, sql } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
-import { auth } from "../auth.js";
+import { auth, inviteSignupContext } from "../auth.js";
 import { pickUsername } from "../services/username.js";
 import { AppError, ErrorCode } from "@openarti/shared";
 
@@ -86,6 +86,55 @@ bootstrap.get("/diag", async (c) => {
       stack: (err as Error).stack?.split("\n").slice(0, 5),
       timings,
       totalMs: Date.now() - t0,
+    });
+  }
+});
+
+// Diagnostic: times signUpEmail itself with a short timeout and reports
+// what better-auth spends its 30s on. Uses a disposable email so it
+// never collides with the real admin account. Delete after debugging.
+bootstrap.get("/diag-signup", async (c) => {
+  const t0 = Date.now();
+  const disposable = `diag-${Math.random().toString(36).slice(2, 10)}@diag.invalid`;
+  const username = `diag_${Math.random().toString(36).slice(2, 10)}`;
+
+  try {
+    const res = await Promise.race([
+      inviteSignupContext.run({ email: disposable }, () =>
+        auth.api.signUpEmail({
+          body: {
+            email: disposable,
+            name: "Diag",
+            password: "diag-password-123",
+            username,
+          },
+          asResponse: true,
+        })
+      ),
+      new Promise<Response>((_, rej) =>
+        setTimeout(() => rej(new Error("signUpEmail > 20s")), 20_000)
+      ),
+    ]);
+    const body = await res.text();
+    // Best-effort cleanup so disposable rows don't linger.
+    try {
+      await db.delete(schema.users).where(eq(schema.users.email, disposable));
+    } catch {}
+    return c.json({
+      ok: true,
+      elapsedMs: Date.now() - t0,
+      status: res.status,
+      body: body.slice(0, 500),
+    });
+  } catch (err) {
+    try {
+      await db.delete(schema.users).where(eq(schema.users.email, disposable));
+    } catch {}
+    return c.json({
+      ok: false,
+      elapsedMs: Date.now() - t0,
+      error: (err as Error).message,
+      stack: (err as Error).stack?.split("\n").slice(0, 8),
     });
   }
 });
