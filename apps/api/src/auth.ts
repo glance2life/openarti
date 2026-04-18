@@ -15,11 +15,20 @@ const oidcEnabled = !!(
   process.env.OIDC_CLIENT_SECRET
 );
 
+// WEB_ORIGIN is a comma-separated allowlist (apex + www + previews). Split
+// it here too — passing the raw string into trustedOrigins made better-auth
+// treat "a.com,b.com" as a single untrusted origin and return 403
+// INVALID_ORIGIN on every sign-in/email from the web app.
+const trustedOrigins = (process.env.WEB_ORIGIN || "http://localhost:3000")
+  .split(",")
+  .map((s) => s.trim().replace(/\/$/, ""))
+  .filter(Boolean);
+
 export const auth = betterAuth({
   basePath: "/api/auth",
   baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3001",
   secret: process.env.BETTER_AUTH_SECRET,
-  trustedOrigins: [process.env.WEB_ORIGIN || "http://localhost:3000"],
+  trustedOrigins,
   database: drizzleAdapter(db, {
     provider: "pg",
     usePlural: true,
