@@ -6,7 +6,6 @@ import { eq } from "drizzle-orm";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { db } from "./db/index.js";
 import * as schema from "./db/schema.js";
-import { populateGettingStartedCollection } from "./services/template.js";
 
 // Per-request flag: set by the invitation redeem flow to allow signup even
 // when ALLOW_REGISTRATION is false.
@@ -105,23 +104,6 @@ export const auth = betterAuth({
             } catch (err) {
               console.error("Failed to promote admin user:", user.id, err);
             }
-          }
-
-          try {
-            const [collection] = await db
-              .insert(schema.collections)
-              .values({
-                ownerId: user.id,
-                name: "getting-started",
-                description: "Examples and playground for OpenArti",
-              })
-              .returning({ id: schema.collections.id });
-
-            if (collection) {
-              await populateGettingStartedCollection(collection.id);
-            }
-          } catch (err) {
-            console.error("Failed to create getting-started collection for user:", user.id, err);
           }
         },
       },
