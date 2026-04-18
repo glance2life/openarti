@@ -23,6 +23,20 @@ interface RecentFile {
   timestamp: string;
 }
 
+function formatRelativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "";
+  const diffSec = Math.round((then - Date.now()) / 1000);
+  const abs = Math.abs(diffSec);
+  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+  if (abs < 60) return rtf.format(diffSec, "second");
+  if (abs < 3600) return rtf.format(Math.round(diffSec / 60), "minute");
+  if (abs < 86400) return rtf.format(Math.round(diffSec / 3600), "hour");
+  if (abs < 86400 * 30) return rtf.format(Math.round(diffSec / 86400), "day");
+  if (abs < 86400 * 365) return rtf.format(Math.round(diffSec / (86400 * 30)), "month");
+  return rtf.format(Math.round(diffSec / (86400 * 365)), "year");
+}
+
 export function FileTreePanel() {
   const { selectedCollection, viewMode } = useFinderNavigation();
   const pathname = usePathname();
@@ -140,6 +154,12 @@ export function FileTreePanel() {
                   >
                     <FileIcon filename={filename} />
                     <span className="truncate">{filename}</span>
+                    <span
+                      className="ml-auto shrink-0 text-xs text-muted-foreground"
+                      title={new Date(file.timestamp).toLocaleString()}
+                    >
+                      {formatRelativeTime(file.timestamp)}
+                    </span>
                   </Link>
                 );
               })}

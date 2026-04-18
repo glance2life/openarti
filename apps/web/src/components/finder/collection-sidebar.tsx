@@ -38,20 +38,29 @@ export function CollectionSidebar({ user }: CollectionSidebarProps) {
     localStorage.setItem("col1-width", String(width));
   }, [width]);
 
-  // Cmd+K to open search, Cmd+J to open connect, Cmd+E to open recent
+  // R: recent, C: connect, Cmd+J: search. Disabled while editing text.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        setSearchOpen(true);
-      }
+      const target = e.target as HTMLElement | null;
+      const isEditing =
+        !!target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable);
+      if (isEditing) return;
+
       if ((e.metaKey || e.ctrlKey) && e.key === "j") {
         e.preventDefault();
-        openDialog("connect");
+        setSearchOpen(true);
+        return;
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === "e") {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "r" || e.key === "R") {
         e.preventDefault();
         selectRecentlyUpdated();
+      } else if (e.key === "c" || e.key === "C") {
+        e.preventDefault();
+        openDialog("connect");
       }
     }
     document.addEventListener("keydown", handleKeyDown);
@@ -116,7 +125,7 @@ export function CollectionSidebar({ user }: CollectionSidebarProps) {
           >
             <Clock className="size-4" />
             Recents
-            <span className="ml-auto hidden group-hover:inline-flex items-center gap-1 text-sidebar-foreground/50"><kbd className="text-sm">⌘</kbd><kbd className="text-xs">E</kbd></span>
+            <span className="ml-auto hidden group-hover:inline-flex items-center gap-1 text-sidebar-foreground/50"><kbd className="text-xs">R</kbd></span>
           </button>
           <button
             onClick={() => openDialog("connect")}
@@ -124,7 +133,7 @@ export function CollectionSidebar({ user }: CollectionSidebarProps) {
           >
             <PlugZap className="size-4" />
             Connect
-            <span className="ml-auto hidden group-hover:inline-flex items-center gap-1 text-sidebar-foreground/50"><kbd className="text-sm">⌘</kbd><kbd className="text-xs">J</kbd></span>
+            <span className="ml-auto hidden group-hover:inline-flex items-center gap-1 text-sidebar-foreground/50"><kbd className="text-xs">C</kbd></span>
           </button>
           <button
             onClick={() => setSearchOpen(true)}
@@ -132,7 +141,7 @@ export function CollectionSidebar({ user }: CollectionSidebarProps) {
           >
             <Search className="size-4" />
             Search
-            <span className="ml-auto hidden group-hover:inline-flex items-center gap-1 text-sidebar-foreground/50"><kbd className="text-sm">⌘</kbd><kbd className="text-xs">K</kbd></span>
+            <span className="ml-auto hidden group-hover:inline-flex items-center gap-1 text-sidebar-foreground/50"><kbd className="text-sm">⌘</kbd><kbd className="text-xs">J</kbd></span>
           </button>
         </div>
 
