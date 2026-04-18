@@ -3,9 +3,14 @@ import { APIError } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
 import { eq } from "drizzle-orm";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { db } from "./db/index.js";
 import * as schema from "./db/schema.js";
 import { populateGettingStartedCollection } from "./services/template.js";
+
+// Per-request flag: set by the invitation redeem flow to allow signup even
+// when ALLOW_REGISTRATION is false.
+export const inviteSignupContext = new AsyncLocalStorage<{ email: string }>();
 
 const oidcEnabled = !!(
   process.env.OIDC_ISSUER &&
@@ -74,11 +79,15 @@ export const auth = betterAuth({
     user: {
       create: {
         before: async (user) => {
+          const email = (user as { email?: string }).email?.toLowerCase();
+
+          const invite = inviteSignupContext.getStore();
+          if (invite && invite.email.toLowerCase() === email) return;
+
           const allowRegistration = process.env.ALLOW_REGISTRATION === "true";
           if (allowRegistration) return;
 
           const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
-          const email = (user as { email?: string }).email?.toLowerCase();
           if (adminEmail && email === adminEmail) return;
 
           throw new APIError("FORBIDDEN", {

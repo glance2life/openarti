@@ -11,7 +11,9 @@ export default async function DashboardLayout({
   if (!user) redirect("/login");
 
   return (
-    <DashboardShell user={{ name: user.name, email: user.email }}>
+    <DashboardShell
+      user={{ name: user.name, email: user.email, role: user.role }}
+    >
       {children}
     </DashboardShell>
   );

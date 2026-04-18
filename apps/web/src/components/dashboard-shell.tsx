@@ -8,7 +8,7 @@ import { DialogRouter } from "@/components/dialog-router";
 import { RealtimeProvider } from "@/lib/realtime/context";
 
 interface DashboardShellProps {
-  user: { name: string; email: string };
+  user: { name: string; email: string; role: string };
   children: React.ReactNode;
 }
 

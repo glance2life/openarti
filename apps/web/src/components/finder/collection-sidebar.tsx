@@ -15,7 +15,7 @@ const MIN_WIDTH = 160;
 const MAX_WIDTH = 300;
 
 interface CollectionSidebarProps {
-  user: { name: string; email: string };
+  user: { name: string; email: string; role: string };
 }
 
 export function CollectionSidebar({ user }: CollectionSidebarProps) {

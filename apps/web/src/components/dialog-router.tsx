@@ -7,7 +7,7 @@ import { ConnectDialog } from "@/components/connect-dialog";
 import { CollectionSettingsDialog } from "@/components/collection-settings-dialog";
 
 interface DialogRouterProps {
-  user: { name: string; email: string };
+  user: { name: string; email: string; role: string };
 }
 
 export function DialogRouter({ user }: DialogRouterProps) {

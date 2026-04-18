@@ -11,12 +11,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ApiKeys } from "@/components/api-keys";
-import { LogOut, User, KeyRound } from "lucide-react";
+import { InvitationsAdmin } from "@/components/invitations-admin";
+import { LogOut, User, KeyRound, UserPlus } from "lucide-react";
 
-type Section = "account" | "api-keys";
+type Section = "account" | "api-keys" | "invitations";
 
 interface SettingsDialogProps {
-  user: { name: string; email: string };
+  user: { name: string; email: string; role: string };
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -48,6 +49,15 @@ export function SettingsDialog({
       label: "API Keys",
       icon: <KeyRound className="size-4" />,
     },
+    ...(user.role === "admin"
+      ? ([
+          {
+            key: "invitations" as const,
+            label: "Invitations",
+            icon: <UserPlus className="size-4" />,
+          },
+        ])
+      : []),
   ];
 
   return (
@@ -116,6 +126,19 @@ export function SettingsDialog({
                   </p>
                 </div>
                 <ApiKeys />
+              </div>
+            )}
+
+            {section === "invitations" && user.role === "admin" && (
+              <div className="space-y-4">
+                <div>
+                  <h2 className="text-base font-medium">Invitations</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Invite users to this OpenArti instance. Links expire after 7
+                    days.
+                  </p>
+                </div>
+                <InvitationsAdmin />
               </div>
             )}
           </div>

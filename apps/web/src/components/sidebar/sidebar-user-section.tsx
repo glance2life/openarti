@@ -13,7 +13,7 @@ import { useOpenDialog } from "@/hooks/use-dialog-router";
 import { Settings, LogOut, ChevronsUpDown } from "lucide-react";
 
 interface SidebarUserSectionProps {
-  user: { name: string; email: string };
+  user: { name: string; email: string; role: string };
 }
 
 export function SidebarUserSection({ user }: SidebarUserSectionProps) {
