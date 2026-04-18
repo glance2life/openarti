@@ -81,6 +81,21 @@ bootstrap.get("/diag-signup", async (c) => {
 
 bootstrap.post(
   "/admin",
+  async (c, next) => {
+    console.error(`[bootstrap/admin] route-entry method=${c.req.method}`);
+    try {
+      await next();
+      console.error(`[bootstrap/admin] route-done status=${c.res.status}`);
+    } catch (err) {
+      console.error(`[bootstrap/admin] route-threw ${(err as Error)?.message}`);
+      throw err;
+    }
+  },
+  async (c, next) => {
+    console.error("[bootstrap/admin] pre-validator");
+    await next();
+    console.error("[bootstrap/admin] post-validator");
+  },
   zValidator(
     "json",
     z.object({
