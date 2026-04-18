@@ -4,7 +4,7 @@
 
 Different agents — Claude Code, Cursor, Codex CLI, and others — read and write artifacts to a shared collection. Humans review and browse them in the browser. Think of it as Git for AI-generated content: versioned, searchable, and accessible from any agent.
 
-[CLI Reference](#cli-reference) | [MCP Server](#mcp-server) | [Self-Hosting](#self-hosting) | [Deploy to Cloud](#deploy-to-cloud) | [Project Structure](#project-structure)
+[CLI Reference](#cli-reference) | [MCP Server](#mcp-server) | [Documentation](#documentation) | [Project Structure](#project-structure)
 
 - **Agent-native access** — CLI, MCP server, and Skill designed for agents, not just humans
 - **Version controlled** — every write is a commit with full history, diff, and blame
@@ -91,80 +91,11 @@ Configure your MCP client:
 
 All CLI tools (`read`, `write`, `edit`, `rm`, `ls`, `grep`, `glob`, `log`, `diff`, `blame`) are exposed as MCP tools.
 
-## Self-Hosting
+## Documentation
 
-### Prerequisites
-
-- Node.js >= 20.6
-- pnpm >= 9
-- Docker (for PostgreSQL)
-
-### Setup
-
-```bash
-git clone https://github.com/glance2life/openarti.git
-cd openarti
-pnpm install
-
-# Start PostgreSQL
-pnpm db:up
-
-# Configure
-cp .env.example apps/api/.env
-
-# Initialize database
-pnpm db:generate
-pnpm db:migrate
-pnpm db:seed    # prints an API key — save it
-
-# Start dev servers
-pnpm dev
-```
-
-This starts:
-
-- **API** at `http://localhost:3001`
-- **Web** at `http://localhost:3000`
-
-Point your CLI to your local instance:
-
-```bash
-export OPENARTI_ENDPOINT=http://localhost:3001
-```
-
-### Stopping
-
-```bash
-pnpm db:down
-```
-
-## Deploy to Cloud
-
-All state lives in Postgres — there's no local filesystem, no object storage, no Redis. This means OpenArti drops cleanly onto standard cloud building blocks.
-
-Minimum viable deployment:
-
-```
-Web (Vercel / Netlify / Pages)
-  └─► API (Vercel Functions / Workers / Fly / Railway / Cloud Run)
-       └─► Postgres (Supabase / Neon / RDS)
-```
-
-Environment variables (see `.env.example`):
-
-| Variable | Purpose |
-|----------|---------|
-| `DATABASE_URL` | Postgres connection string |
-| `BETTER_AUTH_URL` | Public URL of the API |
-| `BETTER_AUTH_SECRET` | Random secret for session signing |
-| `WEB_ORIGIN` | Public URL of the web app (CORS) |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Optional — enable Google OAuth |
-| `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` | Optional — enable generic OIDC |
-| `ALLOW_REGISTRATION` | `true` to allow public signups |
-
-**Deploying serverless?** Swap `DATABASE_URL` to a connection pooler (Supabase port 6543 transaction mode, or Neon's serverless driver) so every cold start doesn't open a fresh Postgres connection. Application code is unchanged.
-
-See [`DESIGN-DEPLOYMENT.md`](./DESIGN-DEPLOYMENT.md) for the full deployment matrix and trade-offs.
+- [Self-Hosting Guide](./docs/self-hosting.md) — local dev, Docker Compose, and cloud deployment shapes.
+- [Specification](./docs/spec.md) — product model, Web / CLI / MCP / REST surface.
+- [Architecture](./docs/architecture.md) — storage engine, schema, and deployment architecture.
 
 ## Project Structure
 

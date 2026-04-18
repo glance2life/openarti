@@ -1,6 +1,8 @@
 import { betterAuth } from "better-auth";
+import { APIError } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
+import { eq } from "drizzle-orm";
 import { db } from "./db/index.js";
 import * as schema from "./db/schema.js";
 import { populateGettingStartedCollection } from "./services/template.js";
@@ -71,7 +73,31 @@ export const auth = betterAuth({
   databaseHooks: {
     user: {
       create: {
+        before: async (user) => {
+          const allowRegistration = process.env.ALLOW_REGISTRATION === "true";
+          if (allowRegistration) return;
+
+          const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+          const email = (user as { email?: string }).email?.toLowerCase();
+          if (adminEmail && email === adminEmail) return;
+
+          throw new APIError("FORBIDDEN", {
+            message: "Registration is disabled",
+          });
+        },
         after: async (user) => {
+          const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+          if (adminEmail && user.email?.toLowerCase() === adminEmail) {
+            try {
+              await db
+                .update(schema.users)
+                .set({ role: "admin" })
+                .where(eq(schema.users.id, user.id));
+            } catch (err) {
+              console.error("Failed to promote admin user:", user.id, err);
+            }
+          }
+
           try {
             const [collection] = await db
               .insert(schema.collections)

@@ -387,7 +387,7 @@ flowchart TB
 
 ## 7. Deployment Architecture
 
-Because all state lives in Postgres and the MCP endpoint is stateless, the API is a pure compute layer. The deployment story collapses into just two questions: **where does Postgres run**, and **where does the API run**. See `DESIGN-DEPLOYMENT.md` for the full matrix.
+Because all state lives in Postgres and the MCP endpoint is stateless, the API is a pure compute layer. The deployment story collapses into just two questions: **where does Postgres run**, and **where does the API run**. See [self-hosting.md](./self-hosting.md) for the concrete setup steps; the shape options are covered in §7.2 below.
 
 ### 7.1 Self-Hosting (Single Instance, Docker Compose)
 

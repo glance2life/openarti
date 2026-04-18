@@ -10,3 +10,7 @@ data/
 *.tsbuildinfo
 .claude/
 apps/web/public/file-icons/
+
+# Personal / machine-local notes (deployment runbooks, scratch, secrets reference).
+# Each contributor has their own — never committed.
+local/
