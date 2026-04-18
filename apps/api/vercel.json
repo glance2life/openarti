@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm db:migrate && cd ../.. && pnpm turbo build --filter=@openarti/shared",
+  "buildCommand": "pnpm db:migrate && cd ../.. && pnpm turbo build --filter=@openarti/api",
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
   "functions": {
     "api/index.ts": {

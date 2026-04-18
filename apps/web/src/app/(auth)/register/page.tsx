@@ -19,9 +19,10 @@ async function getAuthConfig() {
     return res.json() as Promise<{
       allowRegistration: boolean;
       googleOAuth: boolean;
+      adminBootstrap?: boolean;
     }>;
   } catch {
-    return { allowRegistration: false, googleOAuth: false };
+    return { allowRegistration: false, googleOAuth: false, adminBootstrap: false };
   }
 }
 
@@ -126,6 +127,33 @@ export default async function RegisterPage({
   }
 
   const config = await getAuthConfig();
+
+  if (config.adminBootstrap) {
+    return (
+      <Card className="w-full max-w-sm">
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl">Set up admin account</CardTitle>
+          <CardDescription>
+            Enter the email configured in{" "}
+            <code className="text-foreground">ADMIN_EMAIL</code> to create the
+            first admin.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <RegisterForm adminBootstrap />
+        </CardContent>
+        <CardFooter className="justify-center">
+          <p className="text-sm text-muted-foreground">
+            Already have an account?{" "}
+            <a href="/login" className="text-foreground underline">
+              Sign in
+            </a>
+          </p>
+        </CardFooter>
+      </Card>
+    );
+  }
+
   if (!config.allowRegistration) {
     redirect("/login");
   }

@@ -12,9 +12,14 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 interface RegisterFormProps {
   inviteToken?: string;
   inviteEmail?: string;
+  adminBootstrap?: boolean;
 }
 
-export function RegisterForm({ inviteToken, inviteEmail }: RegisterFormProps) {
+export function RegisterForm({
+  inviteToken,
+  inviteEmail,
+  adminBootstrap,
+}: RegisterFormProps) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState(inviteEmail ?? "");
   const [password, setPassword] = useState("");
@@ -42,6 +47,27 @@ export function RegisterForm({ inviteToken, inviteEmail }: RegisterFormProps) {
           | null;
         setError(
           body?.error?.message || body?.message || "Could not redeem invitation"
+        );
+        setLoading(false);
+        return;
+      }
+      window.location.href = "/";
+      return;
+    }
+
+    if (adminBootstrap) {
+      const res = await fetch(`${API_URL}/bootstrap/admin`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as
+          | { error?: { message?: string }; message?: string }
+          | null;
+        setError(
+          body?.error?.message || body?.message || "Could not create admin"
         );
         setLoading(false);
         return;
