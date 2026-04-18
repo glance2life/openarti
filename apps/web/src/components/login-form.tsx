@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,7 @@ export function LoginForm({
   oidc?: boolean;
   oidcLabel?: string;
 }) {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -32,13 +34,17 @@ export function LoginForm({
     const { error } = await authClient.signIn.email({
       email,
       password,
-      callbackURL: redirectTo || "/",
     });
 
     if (error) {
       setError(error.message || "Invalid credentials");
       setLoading(false);
+      return;
     }
+
+    const target = redirectTo || "/";
+    router.push(target);
+    router.refresh();
   }
 
   async function handleGoogle() {

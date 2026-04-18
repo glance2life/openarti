@@ -81,6 +81,16 @@ export const auth = betterAuth({
     expiresIn: 60 * 60 * 24 * 30, // 30 days
     updateAge: 60 * 60 * 24, // refresh daily
   },
+  advanced: {
+    crossSubDomainCookies: {
+      enabled: true,
+      domain: ".openarti.com",
+    },
+    defaultCookieAttributes: {
+      sameSite: "none",
+      secure: true,
+    },
+  },
   databaseHooks: {
     user: {
       create: {
