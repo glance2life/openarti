@@ -156,7 +156,10 @@ tools.post(
     // Build edits array from either singular or batch form
     let edits: { old_string: string; new_string: string }[];
     if (body.edits && body.edits.length > 0) {
-      edits = body.edits;
+      edits = body.edits.map((e) => ({
+        old_string: e.old_string!,
+        new_string: e.new_string!,
+      }));
     } else if (body.old_string !== undefined && body.new_string !== undefined) {
       edits = [{ old_string: body.old_string, new_string: body.new_string }];
     } else {
