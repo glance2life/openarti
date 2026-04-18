@@ -41,6 +41,12 @@ bootstrap.post(
     })
   ),
   async (c) => {
+    const t0 = Date.now();
+    const step = (label: string) =>
+      console.log(`[bootstrap] +${Date.now() - t0}ms ${label}`);
+
+    step("entered handler");
+
     const adminEmail = getAdminEmail();
     if (!adminEmail) {
       throw new AppError(ErrorCode.FORBIDDEN, "Admin bootstrap is not configured");
@@ -51,15 +57,28 @@ bootstrap.post(
       throw new AppError(ErrorCode.FORBIDDEN, "Email does not match ADMIN_EMAIL");
     }
 
-    if (await adminUserExists(adminEmail)) {
+    step("pre adminUserExists");
+    const exists = await adminUserExists(adminEmail);
+    step(`post adminUserExists (exists=${exists})`);
+    if (exists) {
       throw new AppError(ErrorCode.FORBIDDEN, "Admin account already exists");
     }
 
+    step("pre pickUsername");
     const username = await pickUsername(adminEmail);
+    step(`post pickUsername (username=${username})`);
 
-    return auth.api.signUpEmail({
-      body: { email: adminEmail, name, password, username },
-      asResponse: true,
-    });
+    step("pre signUpEmail");
+    try {
+      const res = await auth.api.signUpEmail({
+        body: { email: adminEmail, name, password, username },
+        asResponse: true,
+      });
+      step(`post signUpEmail (status=${res.status})`);
+      return res;
+    } catch (err) {
+      step(`signUpEmail threw: ${(err as Error)?.message || err}`);
+      throw err;
+    }
   }
 );
