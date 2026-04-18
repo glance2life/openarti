@@ -24,6 +24,13 @@ const trustedOrigins = (process.env.WEB_ORIGIN || "http://localhost:3000")
   .map((s) => s.trim().replace(/\/$/, ""))
   .filter(Boolean);
 
+// When the web app and API live on different subdomains (e.g. www.x.com
+// and api.x.com), the session cookie needs Domain=.x.com plus
+// SameSite=None so the browser sends it on cross-site requests. Self-
+// hosters on a single origin can leave COOKIE_DOMAIN unset and keep
+// default same-origin cookies.
+const cookieDomain = process.env.COOKIE_DOMAIN?.trim() || undefined;
+
 export const auth = betterAuth({
   basePath: "/api/auth",
   baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3001",
@@ -81,16 +88,20 @@ export const auth = betterAuth({
     expiresIn: 60 * 60 * 24 * 30, // 30 days
     updateAge: 60 * 60 * 24, // refresh daily
   },
-  advanced: {
-    crossSubDomainCookies: {
-      enabled: true,
-      domain: ".openarti.com",
-    },
-    defaultCookieAttributes: {
-      sameSite: "none",
-      secure: true,
-    },
-  },
+  ...(cookieDomain
+    ? {
+        advanced: {
+          crossSubDomainCookies: {
+            enabled: true,
+            domain: cookieDomain,
+          },
+          defaultCookieAttributes: {
+            sameSite: "none" as const,
+            secure: true,
+          },
+        },
+      }
+    : {}),
   databaseHooks: {
     user: {
       create: {
