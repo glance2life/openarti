@@ -3,6 +3,14 @@
     "openarti": {
       "type": "http",
       "url": "http://localhost:3001/mcp"
+    },
+    "supabase": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?project_ref=ascayjrboypidrouncqy"
+    },
+    "chrome-devtools": {
+      "command": "npx",
+      "args": ["chrome-devtools-mcp@latest"]
     }
   }
 }
