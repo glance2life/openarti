@@ -38,6 +38,10 @@ export function useCloseDialog() {
     // Clean up dialog-specific params
     params.delete("owner");
     params.delete("collection");
+    params.delete("section");
+    params.delete("returnTo");
+    params.delete("agent");
+    params.delete("method");
     const str = params.toString();
     router.replace(str ? `${pathname}?${str}` : pathname, { scroll: false });
   }, [pathname, router, searchParams]);

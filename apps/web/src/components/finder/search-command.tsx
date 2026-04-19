@@ -135,10 +135,10 @@ export function SearchCommand({ open, onOpenChange }: SearchCommandProps) {
       open={open}
       onOpenChange={onOpenChange}
       title="Search"
-      description="Search collections and files"
+      description="Search collections and artifacts"
     >
       <CommandInput
-        placeholder="Search collections and files..."
+        placeholder="Search collections and artifacts..."
         value={query}
         onValueChange={setQuery}
       />

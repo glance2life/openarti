@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
 import { authMiddleware, type AuthUser } from "../middleware/auth.js";
 import { AppError, ErrorCode } from "@openarti/shared";
@@ -36,7 +36,12 @@ join.get("/:token", async (c) => {
     })
     .from(schema.collections)
     .innerJoin(schema.users, eq(schema.users.id, schema.collections.ownerId))
-    .where(eq(schema.collections.id, link.collectionId))
+    .where(
+      and(
+        eq(schema.collections.id, link.collectionId),
+        isNull(schema.collections.deletedAt)
+      )
+    )
     .limit(1);
 
   if (!collection) {
@@ -97,7 +102,12 @@ join.post("/:token", async (c) => {
   const [collection] = await db
     .select({ ownerId: schema.collections.ownerId, name: schema.collections.name })
     .from(schema.collections)
-    .where(eq(schema.collections.id, link.collectionId))
+    .where(
+      and(
+        eq(schema.collections.id, link.collectionId),
+        isNull(schema.collections.deletedAt)
+      )
+    )
     .limit(1);
 
   if (!collection) {

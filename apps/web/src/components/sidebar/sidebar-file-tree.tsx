@@ -4,10 +4,15 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import {
   ChevronRight,
+  FilePlus,
   Loader2,
+  PlugZap,
 } from "lucide-react";
 import { FileIcon } from "@/lib/file-icon";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Kbd } from "@/components/ui/kbd";
+import { useOpenDialog } from "@/hooks/use-dialog-router";
 import { useCollectionRealtime } from "@/lib/realtime/hooks";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
@@ -51,6 +56,7 @@ export function SidebarFileTree({
   const [rootLoading, setRootLoading] = useState(true);
   const [searchResults, setSearchResults] = useState<GlobFile[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const openDialog = useOpenDialog();
 
   // Debounced glob search
   useEffect(() => {
@@ -246,7 +252,7 @@ export function SidebarFileTree({
             <Skeleton className="h-5 w-3/4" />
           </div>
         ) : searchResults.length === 0 ? (
-          <span className="px-2 py-1 text-xs text-muted-foreground">No files found</span>
+          <span className="px-2 py-1 text-xs text-muted-foreground">No artifacts found</span>
         ) : (
           searchResults.map((file) => {
             const href = `/${owner}/${collection}/${file.path}`;
@@ -275,7 +281,28 @@ export function SidebarFileTree({
           <Skeleton className="h-5 w-5/6" />
           <Skeleton className="h-5 w-2/3" />
         </div>
-      ) : (tree[""]?.entries ?? []).length === 0 ? null : (
+      ) : (tree[""]?.entries ?? []).length === 0 ? (
+        <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+          <div className="flex size-10 items-center justify-center rounded-full bg-muted/60">
+            <FilePlus className="size-5 text-muted-foreground/70" />
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm font-medium">This collection is empty</p>
+            <p className="text-xs text-muted-foreground">
+              Connect an agent to start adding artifacts.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            className="gap-2"
+            onClick={() => openDialog("connect")}
+          >
+            <PlugZap className="size-3.5" />
+            Connect an agent
+            <Kbd keys="c" className="ml-1" />
+          </Button>
+        </div>
+      ) : (
         renderEntries(tree[""]?.entries ?? [], "", 0)
       )}
     </div>

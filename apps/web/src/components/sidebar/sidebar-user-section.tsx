@@ -9,8 +9,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Kbd } from "@/components/ui/kbd";
 import { useOpenDialog } from "@/hooks/use-dialog-router";
-import { Settings, LogOut, ChevronsUpDown } from "lucide-react";
+import {
+  Settings,
+  LogOut,
+  ChevronsUpDown,
+  Github,
+  ArrowUpRight,
+} from "lucide-react";
 
 interface SidebarUserSectionProps {
   user: { name: string; email: string; role: string };
@@ -34,7 +41,7 @@ export function SidebarUserSection({ user }: SidebarUserSectionProps) {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex w-full items-center gap-2 px-3 py-3.5 hover:bg-sidebar-accent outline-none transition-colors">
+      <DropdownMenuTrigger className="flex w-full items-center gap-2 px-3 py-2 hover:bg-sidebar-accent outline-none transition-colors">
         <Avatar className="size-9">
           <AvatarFallback className="text-sm">{initial}</AvatarFallback>
         </Avatar>
@@ -47,9 +54,27 @@ export function SidebarUserSection({ user }: SidebarUserSectionProps) {
           <p className="text-xs text-muted-foreground">{user.email}</p>
         </div>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => openDialog("settings")}>
+        <DropdownMenuItem onClick={() => openDialog("settings")} className="group">
           <Settings className="size-4" />
           Settings
+          <Kbd
+            keys="mod+,"
+            className="ml-auto opacity-0 transition-opacity group-data-[highlighted]:opacity-100"
+          />
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={() =>
+            window.open(
+              "https://github.com/glance2life/openarti",
+              "_blank",
+              "noopener,noreferrer",
+            )
+          }
+        >
+          <Github className="size-4" />
+          GitHub
+          <ArrowUpRight className="ml-auto size-3.5 opacity-60" />
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleLogout}>

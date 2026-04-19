@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
 import { AppError, ErrorCode } from "@openarti/shared";
 
@@ -12,8 +12,17 @@ export interface ResolvedCollection {
 
 export async function resolveCollection(
   owner: string,
-  collection: string
+  collection: string,
+  options: { includeDeleted?: boolean } = {}
 ): Promise<ResolvedCollection> {
+  const conditions = [
+    eq(schema.users.username, owner),
+    eq(schema.collections.name, collection),
+  ];
+  if (!options.includeDeleted) {
+    conditions.push(isNull(schema.collections.deletedAt));
+  }
+
   const [row] = await db
     .select({
       collectionId: schema.collections.id,
@@ -24,7 +33,7 @@ export async function resolveCollection(
     })
     .from(schema.collections)
     .innerJoin(schema.users, eq(schema.users.id, schema.collections.ownerId))
-    .where(and(eq(schema.users.username, owner), eq(schema.collections.name, collection)))
+    .where(and(...conditions))
     .limit(1);
 
   if (!row) {

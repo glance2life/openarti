@@ -1,8 +1,9 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Search, X } from "lucide-react";
+import { useHotkey } from "@/hooks/use-hotkey";
 
 interface SidebarSearchProps {
   value: string;
@@ -13,17 +14,11 @@ interface SidebarSearchProps {
 export function SidebarSearch({ value, onChange, placeholder = "Search..." }: SidebarSearchProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Cmd+K / Ctrl+K to focus
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        inputRef.current?.focus();
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  useHotkey("mod+k", () => inputRef.current?.focus(), {
+    label: "Focus artifact search",
+    group: "Navigation",
+    allowInInput: true,
+  });
 
   return (
     <div className="relative">

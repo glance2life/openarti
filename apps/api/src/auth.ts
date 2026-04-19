@@ -4,6 +4,9 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { db } from "./db/index.js";
+import * as schema from "./db/schema.js";
+import { populateGettingStartedCollection } from "./services/template.js";
+import { runAfterResponse } from "./services/after-response.js";
 
 // Per-request flag: set by the invitation redeem flow to allow signup even
 // when ALLOW_REGISTRATION is false.
@@ -128,6 +131,37 @@ export const auth = betterAuth({
         // the outer transaction, the transaction waited for this callback
         // to return. Promotion now happens in the /bootstrap/admin route
         // after signUpEmail resolves, when the transaction has committed.
+      },
+      after: async (user: { id: string }) => {
+        // Create the getting-started collection row synchronously so the
+        // UI sees it on first dashboard load, then seed template files in
+        // the background. The 16 sequential writeFile transactions used to
+        // run inside the signup request and tripped Vercel's 30s timeout;
+        // runAfterResponse hands them to waitUntil on Vercel and lets the
+        // Node process finish them on its own elsewhere.
+        try {
+          const [collection] = await db
+            .insert(schema.collections)
+            .values({
+              ownerId: user.id,
+              name: "getting-started",
+              description: "Examples and playground for OpenArti",
+            })
+            .returning({ id: schema.collections.id });
+
+          if (collection) {
+            runAfterResponse(
+              () => populateGettingStartedCollection(collection.id),
+              `seed getting-started for user ${user.id}`,
+            );
+          }
+        } catch (err) {
+          console.error(
+            "Failed to create getting-started collection for user:",
+            user.id,
+            err,
+          );
+        }
       },
     },
   },

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, isNull } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
 import { engine } from "../services/storage.js";
 import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth.js";
@@ -30,12 +30,16 @@ collections.post(
     const body = c.req.valid("json");
     const user = c.get("user");
 
-    // Check duplicate
+    // Check duplicate (ignore soft-deleted so a freed name can be reused)
     const [existing] = await db
       .select()
       .from(schema.collections)
       .where(
-        and(eq(schema.collections.ownerId, user.id), eq(schema.collections.name, body.name))
+        and(
+          eq(schema.collections.ownerId, user.id),
+          eq(schema.collections.name, body.name),
+          isNull(schema.collections.deletedAt)
+        )
       )
       .limit(1);
 
@@ -80,7 +84,12 @@ collections.get(
     const ownRows = await db
       .select({ id: schema.collections.id, name: schema.collections.name })
       .from(schema.collections)
-      .where(eq(schema.collections.ownerId, user.id));
+      .where(
+        and(
+          eq(schema.collections.ownerId, user.id),
+          isNull(schema.collections.deletedAt)
+        )
+      );
 
     const sharedRows = await db
       .select({
@@ -91,7 +100,12 @@ collections.get(
       .from(schema.collectionAccess)
       .innerJoin(schema.collections, eq(schema.collections.id, schema.collectionAccess.collectionId))
       .innerJoin(schema.users, eq(schema.users.id, schema.collections.ownerId))
-      .where(eq(schema.collectionAccess.userId, user.id));
+      .where(
+        and(
+          eq(schema.collectionAccess.userId, user.id),
+          isNull(schema.collections.deletedAt)
+        )
+      );
 
     const allCollections = [
       ...ownRows.map((r) => ({ owner: user.username, name: r.name, id: r.id })),
@@ -153,7 +167,12 @@ collections.post(
         name: schema.collections.name,
       })
       .from(schema.collections)
-      .where(eq(schema.collections.ownerId, user.id));
+      .where(
+        and(
+          eq(schema.collections.ownerId, user.id),
+          isNull(schema.collections.deletedAt)
+        )
+      );
 
     const sharedRows = await db
       .select({
@@ -164,7 +183,12 @@ collections.post(
       .from(schema.collectionAccess)
       .innerJoin(schema.collections, eq(schema.collections.id, schema.collectionAccess.collectionId))
       .innerJoin(schema.users, eq(schema.users.id, schema.collections.ownerId))
-      .where(eq(schema.collectionAccess.userId, user.id));
+      .where(
+        and(
+          eq(schema.collectionAccess.userId, user.id),
+          isNull(schema.collections.deletedAt)
+        )
+      );
 
     const allCollections = [
       ...ownRows.map((r) => ({ id: r.id, name: r.name, owner: user.username })),
@@ -199,7 +223,12 @@ collections.get(
     const ownRows = await db
       .select()
       .from(schema.collections)
-      .where(eq(schema.collections.ownerId, user.id));
+      .where(
+        and(
+          eq(schema.collections.ownerId, user.id),
+          isNull(schema.collections.deletedAt)
+        )
+      );
 
     const sharedRows = await db
       .select({
@@ -214,7 +243,12 @@ collections.get(
       .from(schema.collectionAccess)
       .innerJoin(schema.collections, eq(schema.collections.id, schema.collectionAccess.collectionId))
       .innerJoin(schema.users, eq(schema.users.id, schema.collections.ownerId))
-      .where(eq(schema.collectionAccess.userId, user.id));
+      .where(
+        and(
+          eq(schema.collectionAccess.userId, user.id),
+          isNull(schema.collections.deletedAt)
+        )
+      );
 
     return c.json({
       own: ownRows.map((r) => ({
@@ -263,7 +297,12 @@ collections.get(
       rows = await db
         .select()
         .from(schema.collections)
-        .where(eq(schema.collections.ownerId, owner.id));
+        .where(
+          and(
+            eq(schema.collections.ownerId, owner.id),
+            isNull(schema.collections.deletedAt)
+          )
+        );
     } else {
       rows = await db
         .select()
@@ -271,7 +310,8 @@ collections.get(
         .where(
           and(
             eq(schema.collections.ownerId, owner.id),
-            eq(schema.collections.visibility, "public")
+            eq(schema.collections.visibility, "public"),
+            isNull(schema.collections.deletedAt)
           )
         );
     }
@@ -407,6 +447,25 @@ collections.patch(
       owner: resolved.ownerUsername,
       visibility: updated.visibility,
     });
+  }
+);
+
+// Soft-delete collection (owner only). Storage data is kept for future restore.
+collections.delete(
+  "/:owner/:collection",
+  authMiddleware,
+  async (c) => {
+    const { owner, collection: collectionName } = c.req.param();
+    const user = c.get("user") as AuthUser;
+    const resolved = await resolveCollection(owner, collectionName);
+    checkOwner(user.id, resolved.ownerId);
+
+    await db
+      .update(schema.collections)
+      .set({ deletedAt: new Date() })
+      .where(eq(schema.collections.id, resolved.collectionId));
+
+    return c.json({ ok: true });
   }
 );
 

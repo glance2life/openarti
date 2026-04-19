@@ -109,7 +109,7 @@ export function OAuthConsent({
           </p>
           <ul className="mt-3 space-y-2.5">
             {[
-              "Read and Write access to your collections and files",
+              "Read and Write access to your collections and artifacts",
               "Read access to your profile",
               "Search and browse your collections",
             ].map((perm) => (

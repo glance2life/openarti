@@ -3,11 +3,13 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Kbd } from "@/components/ui/kbd";
 import { SidebarCollectionList } from "@/components/sidebar/sidebar-collection-list";
 import { SidebarUserSection } from "@/components/sidebar/sidebar-user-section";
 import { SearchCommand } from "@/components/finder/search-command";
 import { useFinderNavigation } from "@/hooks/finder-navigation-context";
 import { useOpenDialog } from "@/hooks/use-dialog-router";
+import { useHotkey } from "@/hooks/use-hotkey";
 import { PlugZap, Clock, Search } from "lucide-react";
 
 const DEFAULT_WIDTH = 240;
@@ -38,34 +40,22 @@ export function CollectionSidebar({ user }: CollectionSidebarProps) {
     localStorage.setItem("col1-width", String(width));
   }, [width]);
 
-  // R: recent, C: connect, Cmd+J: search. Disabled while editing text.
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      const target = e.target as HTMLElement | null;
-      const isEditing =
-        !!target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.isContentEditable);
-      if (isEditing) return;
-
-      if ((e.metaKey || e.ctrlKey) && e.key === "j") {
-        e.preventDefault();
-        setSearchOpen(true);
-        return;
-      }
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key === "r" || e.key === "R") {
-        e.preventDefault();
-        selectRecentlyUpdated();
-      } else if (e.key === "c" || e.key === "C") {
-        e.preventDefault();
-        openDialog("connect");
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [openDialog, selectRecentlyUpdated]);
+  useHotkey("r", selectRecentlyUpdated, {
+    label: "Go to Recents",
+    group: "Navigation",
+  });
+  useHotkey("c", () => openDialog("connect"), {
+    label: "Connect an agent",
+    group: "Actions",
+  });
+  useHotkey("mod+j", () => setSearchOpen(true), {
+    label: "Open spotlight search",
+    group: "Navigation",
+  });
+  useHotkey("mod+,", () => openDialog("settings"), {
+    label: "Open settings",
+    group: "Actions",
+  });
 
   const handleWidthMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -125,7 +115,9 @@ export function CollectionSidebar({ user }: CollectionSidebarProps) {
           >
             <Clock className="size-4" />
             Recents
-            <span className="ml-auto hidden group-hover:inline-flex items-center gap-1 text-sidebar-foreground/50"><kbd className="text-xs">R</kbd></span>
+            <span className="ml-auto hidden group-hover:inline-flex">
+              <Kbd keys="r" />
+            </span>
           </button>
           <button
             onClick={() => openDialog("connect")}
@@ -133,7 +125,9 @@ export function CollectionSidebar({ user }: CollectionSidebarProps) {
           >
             <PlugZap className="size-4" />
             Connect
-            <span className="ml-auto hidden group-hover:inline-flex items-center gap-1 text-sidebar-foreground/50"><kbd className="text-xs">C</kbd></span>
+            <span className="ml-auto hidden group-hover:inline-flex">
+              <Kbd keys="c" />
+            </span>
           </button>
           <button
             onClick={() => setSearchOpen(true)}
@@ -141,7 +135,9 @@ export function CollectionSidebar({ user }: CollectionSidebarProps) {
           >
             <Search className="size-4" />
             Search
-            <span className="ml-auto hidden group-hover:inline-flex items-center gap-1 text-sidebar-foreground/50"><kbd className="text-sm">⌘</kbd><kbd className="text-xs">J</kbd></span>
+            <span className="ml-auto hidden group-hover:inline-flex">
+              <Kbd keys="mod+j" />
+            </span>
           </button>
         </div>
 

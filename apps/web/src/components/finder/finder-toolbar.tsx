@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { Settings, ChevronDown } from "lucide-react";
 import {
   DropdownMenu,
@@ -9,9 +8,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useFinderNavigation } from "@/hooks/finder-navigation-context";
+import { useOpenDialog } from "@/hooks/use-dialog-router";
 
 export function FinderToolbar() {
   const { selectedCollection, viewMode, hydrated } = useFinderNavigation();
+  const openDialog = useOpenDialog();
 
   if (!hydrated) {
     return <div className="flex h-12 shrink-0 items-center px-4" />;
@@ -44,7 +45,9 @@ export function FinderToolbar() {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
           <DropdownMenuItem
-            render={<Link href={`/${owner}/${collection}/settings`} />}
+            onClick={() =>
+              openDialog("collection-settings", { owner, collection })
+            }
           >
             <Settings className="mr-2 size-4" />
             Settings

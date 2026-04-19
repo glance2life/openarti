@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { ApiKeys } from "@/components/api-keys";
 import { InvitationsAdmin } from "@/components/invitations-admin";
-import { LogOut, User, KeyRound, UserPlus } from "lucide-react";
+import { ArrowLeft, LogOut, User, KeyRound, UserPlus } from "lucide-react";
 
 type Section = "account" | "api-keys" | "invitations";
 
@@ -22,12 +23,48 @@ interface SettingsDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+const SECTIONS: readonly Section[] = ["account", "api-keys", "invitations"];
+
+const RETURN_TO_LABELS: Record<string, string> = {
+  connect: "Connect",
+};
+
+function isSection(v: string | null): v is Section {
+  return v !== null && (SECTIONS as readonly string[]).includes(v);
+}
+
 export function SettingsDialog({
   user,
   open,
   onOpenChange,
 }: SettingsDialogProps) {
-  const [section, setSection] = useState<Section>("account");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const sectionParam = searchParams.get("section");
+  const returnToParam = searchParams.get("returnTo");
+  const [section, setSection] = useState<Section>(
+    isSection(sectionParam) ? sectionParam : "account",
+  );
+
+  function handleBack() {
+    if (!returnToParam) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("dialog", returnToParam);
+    params.delete("section");
+    params.delete("returnTo");
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+
+  useEffect(() => {
+    if (open && isSection(sectionParam)) {
+      setSection(sectionParam);
+    }
+  }, [open, sectionParam]);
+
+  const returnToLabel = returnToParam
+    ? RETURN_TO_LABELS[returnToParam] ?? "Back"
+    : null;
 
   const initial =
     user.name?.charAt(0)?.toUpperCase() || user.email.charAt(0).toUpperCase();
@@ -62,13 +99,23 @@ export function SettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl p-0 gap-0 overflow-hidden top-[12%] -translate-y-0">
-        <div className="flex h-[70vh]">
+      <DialogContent className="sm:max-w-4xl p-0 gap-0 overflow-hidden top-[10%] -translate-y-0">
+        <div className="flex h-[80vh]">
           {/* Left nav */}
           <nav className="w-[180px] shrink-0 border-r flex flex-col gap-1 p-3">
             <DialogHeader className="px-3 pb-3">
               <DialogTitle>Settings</DialogTitle>
             </DialogHeader>
+            {returnToParam && returnToLabel && (
+              <button
+                type="button"
+                onClick={handleBack}
+                className="mx-0 mb-2 flex items-center gap-2 rounded-md px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground"
+              >
+                <ArrowLeft className="size-3.5" />
+                Back to {returnToLabel}
+              </button>
+            )}
             {navItems.map((item) => (
               <button
                 key={item.key}
@@ -76,7 +123,7 @@ export function SettingsDialog({
                 className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors ${
                   section === item.key
                     ? "bg-muted/50 text-foreground"
-                    : "text-muted-foreground hover:bg-muted/30 hover:text-foreground"
+                    : "text-foreground hover:bg-muted/30"
                 }`}
               >
                 {item.icon}

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
-import { BookMarked, Users, Globe, Lock } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { FolderOpen, Users, Globe, Lock } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CreateCollectionButton } from "@/components/create-collection-button";
 import { CollectionRowMenu } from "@/components/collection-row-menu";
@@ -21,6 +21,23 @@ interface SharedCollection extends Collection {
   level: "read" | "edit";
 }
 
+interface CollectionsResponse {
+  own: Collection[];
+  shared: SharedCollection[];
+}
+
+export const collectionsQueryKey = ["collections"] as const;
+
+async function fetchCollections(): Promise<CollectionsResponse> {
+  const res = await fetch(`${API_URL}/collections`, { credentials: "include" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return {
+    own: Array.isArray(data.own) ? data.own : [],
+    shared: Array.isArray(data.shared) ? data.shared : [],
+  };
+}
+
 interface SidebarCollectionListProps {
   searchQuery?: string;
   onSelect?: (owner: string, collection: string) => void;
@@ -28,24 +45,13 @@ interface SidebarCollectionListProps {
 }
 
 export function SidebarCollectionList({ searchQuery = "", onSelect, selectedCollection }: SidebarCollectionListProps) {
-  const [own, setOwn] = useState<Collection[]>([]);
-  const [shared, setShared] = useState<SharedCollection[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, isPending } = useQuery({
+    queryKey: collectionsQueryKey,
+    queryFn: fetchCollections,
+  });
 
-  useEffect(() => {
-    setLoading(true);
-    fetch(`${API_URL}/collections`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((data) => {
-        setOwn(Array.isArray(data.own) ? data.own : []);
-        setShared(Array.isArray(data.shared) ? data.shared : []);
-      })
-      .catch(() => {
-        setOwn([]);
-        setShared([]);
-      })
-      .finally(() => setLoading(false));
-  }, []);
+  const own = data?.own ?? [];
+  const shared = data?.shared ?? [];
 
   const q = searchQuery.toLowerCase();
   const filteredOwn = q ? own.filter((c) => c.name.toLowerCase().includes(q)) : own;
@@ -57,12 +63,29 @@ export function SidebarCollectionList({ searchQuery = "", onSelect, selectedColl
       )
     : shared;
 
-  if (loading) {
+  if (isPending) {
     return (
       <div className="space-y-2 px-2">
         <Skeleton className="h-5 w-full" />
         <Skeleton className="h-5 w-3/4" />
         <Skeleton className="h-5 w-5/6" />
+      </div>
+    );
+  }
+
+  if (!q && own.length === 0 && shared.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-3 px-4 pt-8 text-center">
+        <div className="flex size-10 items-center justify-center rounded-full bg-sidebar-accent/60">
+          <FolderOpen className="size-5 text-sidebar-foreground/60" />
+        </div>
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-sidebar-foreground">No collections yet</p>
+          <p className="text-xs text-sidebar-foreground/60">
+            Create your first collection to get started.
+          </p>
+        </div>
+        <CreateCollectionButton />
       </div>
     );
   }

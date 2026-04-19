@@ -57,6 +57,13 @@
       "when": 1776267968173,
       "tag": "0007_nappy_ben_parker",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1776581490201,
+      "tag": "0008_fixed_wendell_rand",
+      "breakpoints": true
     }
   ]
 }

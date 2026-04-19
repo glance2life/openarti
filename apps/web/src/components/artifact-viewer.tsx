@@ -19,6 +19,13 @@ import {
 import { CodeRenderer } from "@/components/renderers/code";
 import { SharePopover } from "@/components/share-popover";
 import { useFileRealtime } from "@/lib/realtime/hooks";
+import { useHotkey } from "@/hooks/use-hotkey";
+import { Kbd } from "@/components/ui/kbd";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
@@ -61,6 +68,16 @@ export function ArtifactViewer({
     setMode(v);
     localStorage.setItem("artifact-view-mode", v);
   }, []);
+
+  useHotkey(
+    "p",
+    () => handleModeChange(mode === "preview" ? "plain" : "preview"),
+    {
+      label: "Toggle preview / source",
+      group: "View",
+      enabled: canPreview,
+    },
+  );
 
   // Realtime: refetch current file when it changes on the server
   const refetch = useCallback(async () => {
@@ -106,15 +123,23 @@ export function ArtifactViewer({
         {/* Left: toggle + title + type */}
         <div className="flex items-center gap-2 min-w-0">
           {canPreview && (
-            <SegmentedControl
-              id="artifact-mode"
-              value={mode}
-              onValueChange={handleModeChange}
-              items={[
-                { value: "preview", label: <Eye className="size-3.5" /> },
-                { value: "plain", label: <Code className="size-3.5" /> },
-              ]}
-            />
+            <Tooltip>
+              <TooltipTrigger render={<span className="inline-flex" />}>
+                <SegmentedControl
+                  id="artifact-mode"
+                  value={mode}
+                  onValueChange={handleModeChange}
+                  items={[
+                    { value: "preview", label: <Eye className="size-3.5" /> },
+                    { value: "plain", label: <Code className="size-3.5" /> },
+                  ]}
+                />
+              </TooltipTrigger>
+              <TooltipContent side="left" sideOffset={8}>
+                <Kbd keys="p" className="text-background [&_kbd]:border-background/40 [&_kbd]:opacity-100" />
+                to toggle
+              </TooltipContent>
+            </Tooltip>
           )}
           <span className="truncate font-semibold">{filename}</span>
           {typeLabel && (

@@ -104,8 +104,13 @@ export const collections = pgTable(
     description: text("description").default(""),
     visibility: visibilityEnum("visibility").notNull().default("private"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
-  (t) => [uniqueIndex("collections_owner_name").on(t.ownerId, t.name)]
+  (t) => [
+    uniqueIndex("collections_owner_name")
+      .on(t.ownerId, t.name)
+      .where(sql`${t.deletedAt} IS NULL`),
+  ]
 );
 
 export const collectionAccess = pgTable(
