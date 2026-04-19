@@ -5,7 +5,11 @@ const PUBLIC_PATHS = ["/login", "/register"];
 const PUBLIC_PREFIXES = ["/s/", "/join/"];
 
 export function middleware(request: NextRequest) {
-  const session = request.cookies.get("better-auth.session_token");
+  // better-auth adds the __Secure- prefix when the cookie is issued over
+  // HTTPS with Secure=true (prod), and omits it locally over HTTP.
+  const session =
+    request.cookies.get("__Secure-better-auth.session_token") ||
+    request.cookies.get("better-auth.session_token");
   const { pathname } = request.nextUrl;
   const isPublicPath =
     PUBLIC_PATHS.includes(pathname) ||
