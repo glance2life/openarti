@@ -7,6 +7,7 @@ import { engine } from "../services/storage.js";
 import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth.js";
 import type { AuthUser } from "../middleware/auth.js";
 import { resolveCollection, checkCollectionAccess, checkOwner } from "../services/collection.js";
+import { notifyCollection } from "../services/realtime.js";
 import { AppError, ErrorCode } from "@openarti/shared";
 
 const collections = new Hono();
@@ -411,6 +412,8 @@ collections.get(
 
 // Update collection settings (visibility, etc.)
 const updateSchema = z.object({
+  name: z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/).optional(),
+  description: z.string().optional(),
   visibility: z.enum(["private", "public"]).optional(),
 });
 
@@ -426,13 +429,16 @@ collections.patch(
     checkOwner(user.id, resolved.ownerId);
 
     const updates: Record<string, unknown> = {};
-    if (body.visibility) updates.visibility = body.visibility;
+    if (body.name !== undefined) updates.name = body.name;
+    if (body.description !== undefined) updates.description = body.description;
+    if (body.visibility !== undefined) updates.visibility = body.visibility;
 
     if (Object.keys(updates).length > 0) {
       await db
         .update(schema.collections)
         .set(updates)
         .where(eq(schema.collections.id, resolved.collectionId));
+      await notifyCollection(resolved.collectionId, []);
     }
 
     const [updated] = await db
@@ -444,6 +450,7 @@ collections.patch(
     return c.json({
       id: updated.id,
       name: updated.name,
+      description: updated.description,
       owner: resolved.ownerUsername,
       visibility: updated.visibility,
     });

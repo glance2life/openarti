@@ -96,6 +96,62 @@ export function createMcpServer() {
     }
   );
 
+  // ---- update-collection ----
+  server.registerTool(
+    "update-collection",
+    {
+      description: "Update a collection's name, description, or visibility. Only the collection owner can call this.",
+      inputSchema: {
+        owner: z.string(),
+        collection: z.string(),
+        name: z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/).optional(),
+        description: z.string().optional(),
+        visibility: z.enum(["private", "public"]).optional(),
+      },
+    },
+    async (args, extra) => {
+      const user = getUser(extra);
+      const resolved = await resolveCollection(args.owner, args.collection);
+      if (resolved.ownerId !== user.id) {
+        throw new AppError(ErrorCode.FORBIDDEN, "Only the collection owner can update it");
+      }
+
+      const updates: Record<string, unknown> = {};
+      if (args.name !== undefined) updates.name = args.name;
+      if (args.description !== undefined) updates.description = args.description;
+      if (args.visibility !== undefined) updates.visibility = args.visibility;
+
+      if (Object.keys(updates).length > 0) {
+        await db
+          .update(schema.collections)
+          .set(updates)
+          .where(eq(schema.collections.id, resolved.collectionId));
+        await notifyCollection(resolved.collectionId, []);
+      }
+
+      const [updated] = await db
+        .select()
+        .from(schema.collections)
+        .where(eq(schema.collections.id, resolved.collectionId))
+        .limit(1);
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify({
+              id: updated.id,
+              name: updated.name,
+              owner: args.owner,
+              description: updated.description,
+              visibility: updated.visibility,
+            }),
+          },
+        ],
+      };
+    }
+  );
+
   // ---- list-collections ----
   server.registerTool(
     "list-collections",
