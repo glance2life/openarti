@@ -145,7 +145,7 @@ export function CollectionSettingsDialog({
           {/* Left nav */}
           <nav className="w-[200px] shrink-0 border-r flex flex-col gap-1 p-3">
             <DialogHeader className="px-3 pb-3">
-              <DialogTitle>Settings</DialogTitle>
+              <DialogTitle>Collection Settings</DialogTitle>
               <p className="truncate text-xs text-muted-foreground" title={fullName}>
                 {fullName}
               </p>

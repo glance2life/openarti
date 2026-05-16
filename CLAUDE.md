@@ -15,7 +15,7 @@
 
 ## 云端部署
 
-- **Vercel** — team: `glance2life-7797s-projects` (`team_QrvUQ8c1qWBPEGv4WeQD2Njb`)
+- **Vercel** — team: `glance2life-7797s-projects` (`team_QrvUQ8c1qWBPEGv4WeQD2Njb`)；push main 自动触发两个项目的部署
   - `openarti-web` (`prj_vg0Ap9gHokO4mbU8CnIaO46Pj65u`)
   - `openarti-api` (`prj_Q3UAMT4b8mbTWXLiZREuj4MXMUTf`)
 - **Supabase** — MCP 已连接，数据库在 `public` schema
