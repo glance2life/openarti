@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import { FileIcon } from "@/lib/file-icon";
 import { TrashRestoreButton } from "./restore-button";
@@ -41,15 +40,7 @@ export default async function TrashPage({
 
   return (
     <div className="px-6 py-6 space-y-4 max-w-3xl">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Trash</h1>
-        <Link
-          href={`/${owner}/${collection}/-/history`}
-          className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-4"
-        >
-          History
-        </Link>
-      </div>
+      <h1 className="text-lg font-semibold">Trash</h1>
 
       {data.files.length === 0 ? (
         <div className="text-center py-16 space-y-2">
@@ -57,7 +48,7 @@ export default async function TrashPage({
           <p className="text-sm text-muted-foreground">Trash is empty.</p>
         </div>
       ) : (
-        <ul className="space-y-px">
+        <ul className="space-y-2">
           {data.files.map((file) => {
             const filename = file.path.split("/").pop() ?? file.path;
             return (

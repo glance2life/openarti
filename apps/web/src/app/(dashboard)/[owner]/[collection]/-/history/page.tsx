@@ -69,20 +69,12 @@ export default async function HistoryPage({
 
   return (
     <div className="px-6 py-6 space-y-4 max-w-3xl">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">History</h1>
-        <Link
-          href={`/${owner}/${collection}/-/trash`}
-          className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-4"
-        >
-          Trash
-        </Link>
-      </div>
+      <h1 className="text-lg font-semibold">History</h1>
 
       {data.commits.length === 0 ? (
         <p className="text-sm text-muted-foreground">No commits yet.</p>
       ) : (
-        <ol className="space-y-px">
+        <ol className="space-y-2">
           {data.commits.map((commit) => (
             <li
               key={commit.hash}
