@@ -455,8 +455,9 @@ collections.get(
   async (c) => {
     const { owner, collection: collectionName } = c.req.param();
     const page = Math.max(1, Number(c.req.query("page") ?? 1));
-    const limit = 20;
-    const offset = (page - 1) * limit;
+    const limitParam = Math.min(100, Math.max(1, Number(c.req.query("limit") ?? 20)));
+    const offset = (page - 1) * limitParam;
+    const pathFilter = c.req.query("path") || undefined;
 
     const resolved = await resolveCollection(owner, collectionName);
 
@@ -466,9 +467,9 @@ collections.get(
       await checkCollectionAccess(user.id, resolved.collectionId, resolved.ownerId, "read");
     }
 
-    const commits = await engine.getLog(resolved.collectionId, { limit: limit + 1, offset });
-    const hasMore = commits.length > limit;
-    const items = hasMore ? commits.slice(0, limit) : commits;
+    const commits = await engine.getLog(resolved.collectionId, { limit: limitParam + 1, offset, path: pathFilter });
+    const hasMore = commits.length > limitParam;
+    const items = hasMore ? commits.slice(0, limitParam) : commits;
 
     return c.json({
       commits: items.map((c) => ({

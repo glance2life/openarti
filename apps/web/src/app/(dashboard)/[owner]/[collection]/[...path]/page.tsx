@@ -23,6 +23,13 @@ interface ReadResult {
   commit: string;
 }
 
+interface LastCommit {
+  hash: string;
+  message: string;
+  author: string;
+  timestamp: string;
+}
+
 export default async function ArtifactPage({
   params,
 }: {
@@ -32,14 +39,15 @@ export default async function ArtifactPage({
   const filePath = pathSegments.join("/");
   const filename = pathSegments[pathSegments.length - 1];
 
-  // Try directory listing and file reading in parallel
-  const [lsResult, readResult] = await Promise.allSettled([
+  // Try directory listing, file reading, and last commit in parallel
+  const [lsResult, readResult, logResult] = await Promise.allSettled([
     apiFetch<{ entries: LsEntry[] }>("POST", `/collections/${owner}/${collection}/tools/ls`, {
       path: filePath,
     }),
     apiFetch<ReadResult>("POST", `/collections/${owner}/${collection}/tools/read`, {
       path: filePath,
     }),
+    apiFetch<{ commits: LastCommit[] }>("GET", `/collections/${owner}/${collection}/log?path=${encodeURIComponent(filePath)}&limit=1`),
   ]);
 
   // If it's a directory with entries, show directory view
@@ -89,6 +97,11 @@ export default async function ArtifactPage({
       })
       .join("\n");
 
+    const lastCommit =
+      logResult.status === "fulfilled" && logResult.value.commits.length > 0
+        ? logResult.value.commits[0]
+        : null;
+
     return (
       <ArtifactViewer
         owner={owner}
@@ -96,6 +109,7 @@ export default async function ArtifactPage({
         filePath={filePath}
         filename={filename}
         initialContent={rawContent}
+        lastCommit={lastCommit}
       />
     );
   }
