@@ -1,7 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { eq, and, isNull } from "drizzle-orm";
+import { db, schema } from "../db/index.js";
 import { engine } from "../services/storage.js";
 import { resolveCollection, checkCollectionAccess, listCollections } from "../services/collection.js";
+import { AppError, ErrorCode } from "@openarti/shared";
 import type { AuthUser } from "../middleware/auth.js";
 
 export function createMcpServer() {
@@ -33,6 +36,64 @@ export function createMcpServer() {
     await checkCollectionAccess(user.id, resolved.collectionId, resolved.ownerId, "edit");
     return resolved;
   }
+
+  // ---- create-collection ----
+  server.registerTool(
+    "create-collection",
+    {
+      description: "Create a new OpenArti collection owned by the current user",
+      inputSchema: {
+        name: z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/),
+        description: z.string().optional(),
+        visibility: z.enum(["private", "public"]).optional(),
+      },
+    },
+    async (args, extra) => {
+      const user = getUser(extra);
+
+      const [existing] = await db
+        .select()
+        .from(schema.collections)
+        .where(
+          and(
+            eq(schema.collections.ownerId, user.id),
+            eq(schema.collections.name, args.name),
+            isNull(schema.collections.deletedAt)
+          )
+        )
+        .limit(1);
+
+      if (existing) {
+        throw new AppError(ErrorCode.CONFLICT, `Collection '${user.username}/${args.name}' already exists`);
+      }
+
+      const [collection] = await db
+        .insert(schema.collections)
+        .values({
+          ownerId: user.id,
+          name: args.name,
+          description: args.description ?? "",
+          visibility: args.visibility ?? "private",
+        })
+        .returning();
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify({
+              id: collection.id,
+              name: collection.name,
+              owner: user.username,
+              description: collection.description,
+              visibility: collection.visibility,
+              created_at: collection.createdAt.toISOString(),
+            }),
+          },
+        ],
+      };
+    }
+  );
 
   // ---- list-collections ----
   server.registerTool(
