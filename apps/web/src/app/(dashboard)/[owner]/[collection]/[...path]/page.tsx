@@ -99,19 +99,22 @@ export default async function ArtifactPage({
     );
   }
 
-  // Error state
-  const errorMsg =
-    readResult.status === "rejected"
-      ? (readResult.reason as Error).message
-      : "Not found";
-
+  // File not found
   return (
-    <div className="px-6 py-6 space-y-4">
-      <Card>
-        <CardContent className="py-6 text-center text-sm text-destructive">
-          {errorMsg}
-        </CardContent>
-      </Card>
+    <div className="flex flex-1 items-center justify-center min-h-[60vh]">
+      <div className="text-center space-y-3">
+        <p className="text-4xl">🗂️</p>
+        <p className="text-sm font-medium text-foreground">文件已不存在</p>
+        <p className="text-xs text-muted-foreground">
+          <code className="bg-muted px-1 py-0.5 rounded">{filename}</code> 已被删除或移动
+        </p>
+        <Link
+          href={`/${owner}/${collection}`}
+          className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+        >
+          返回 {collection}
+        </Link>
+      </div>
     </div>
   );
 }
