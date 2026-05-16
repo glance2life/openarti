@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { engine } from "../services/storage.js";
-import { resolveCollection, checkCollectionAccess } from "../services/collection.js";
+import { resolveCollection, checkCollectionAccess, listCollections } from "../services/collection.js";
 import type { AuthUser } from "../middleware/auth.js";
 
 export function createMcpServer() {
@@ -33,6 +33,22 @@ export function createMcpServer() {
     await checkCollectionAccess(user.id, resolved.collectionId, resolved.ownerId, "edit");
     return resolved;
   }
+
+  // ---- list-collections ----
+  server.registerTool(
+    "list-collections",
+    {
+      description:
+        "List all OpenArti collections accessible to the current user, including owned collections and collections shared with them. Use this to discover available owner/collection pairs before calling other tools.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    async (_args, extra) => {
+      const user = getUser(extra);
+      const collections = await listCollections(user.id);
+      return { content: [{ type: "text" as const, text: JSON.stringify(collections, null, 2) }] };
+    }
+  );
 
   // ---- ls ----
   server.registerTool(

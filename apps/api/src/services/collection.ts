@@ -46,6 +46,55 @@ export async function resolveCollection(
   return row;
 }
 
+export interface CollectionSummary {
+  owner: string;
+  name: string;
+  description: string;
+  visibility: "private" | "public";
+  role: "owner" | "editor" | "reader";
+  createdAt: Date;
+}
+
+export async function listCollections(userId: string): Promise<CollectionSummary[]> {
+  const owned = await db
+    .select({
+      owner: schema.users.username,
+      name: schema.collections.name,
+      description: schema.collections.description,
+      visibility: schema.collections.visibility,
+      createdAt: schema.collections.createdAt,
+    })
+    .from(schema.collections)
+    .innerJoin(schema.users, eq(schema.users.id, schema.collections.ownerId))
+    .where(and(eq(schema.collections.ownerId, userId), isNull(schema.collections.deletedAt)));
+
+  const shared = await db
+    .select({
+      owner: schema.users.username,
+      name: schema.collections.name,
+      description: schema.collections.description,
+      visibility: schema.collections.visibility,
+      createdAt: schema.collections.createdAt,
+      level: schema.collectionAccess.level,
+    })
+    .from(schema.collectionAccess)
+    .innerJoin(schema.collections, eq(schema.collections.id, schema.collectionAccess.collectionId))
+    .innerJoin(schema.users, eq(schema.users.id, schema.collections.ownerId))
+    .where(and(eq(schema.collectionAccess.userId, userId), isNull(schema.collections.deletedAt)));
+
+  return [
+    ...owned.map((r) => ({ ...r, description: r.description ?? "", role: "owner" as const })),
+    ...shared.map((r) => ({
+      owner: r.owner,
+      name: r.name,
+      description: r.description ?? "",
+      visibility: r.visibility,
+      createdAt: r.createdAt,
+      role: (r.level === "edit" ? "editor" : "reader") as "editor" | "reader",
+    })),
+  ];
+}
+
 /**
  * Check if a user has access to a collection at the required level.
  * Owner always has full access. Otherwise checks collectionAccess table.
