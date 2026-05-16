@@ -18,7 +18,7 @@ export async function notifyCollection(
   if (!SUPABASE_URL || !SUPABASE_KEY) return;
 
   try {
-    await fetch(`${SUPABASE_URL}/realtime/v1/api/broadcast`, {
+    const res = await fetch(`${SUPABASE_URL}/realtime/v1/api/broadcast`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -36,7 +36,10 @@ export async function notifyCollection(
         ],
       }),
     });
-  } catch {
-    // realtime failure must not break writes
+    if (!res.ok) {
+      console.error(`[realtime] broadcast failed: ${res.status} ${await res.text()}`);
+    }
+  } catch (err) {
+    console.error("[realtime] broadcast error:", err);
   }
 }
