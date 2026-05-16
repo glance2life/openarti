@@ -4,6 +4,7 @@ import { eq, and, isNull } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
 import { engine } from "../services/storage.js";
 import { resolveCollection, checkCollectionAccess, listCollections } from "../services/collection.js";
+import { notifyCollection } from "../services/realtime.js";
 import { AppError, ErrorCode } from "@openarti/shared";
 import type { AuthUser } from "../middleware/auth.js";
 
@@ -177,6 +178,7 @@ export function createMcpServer() {
         message: args.message,
         author: `${user.name} <${user.email}>`,
       });
+      await notifyCollection(resolved.collectionId, [args.path]);
       return {
         content: [
           { type: "text" as const, text: JSON.stringify({ path: args.path, commit: result.commit, created: result.created }) },
@@ -214,6 +216,7 @@ export function createMcpServer() {
           author: `${user.name} <${user.email}>`,
         }
       );
+      await notifyCollection(resolved.collectionId, [args.path]);
       return {
         content: [
           { type: "text" as const, text: JSON.stringify({ path: args.path, commit: result.commit, replaced: result.replaced }) },
@@ -243,6 +246,7 @@ export function createMcpServer() {
         message: args.message,
         author: `${user.name} <${user.email}>`,
       });
+      await notifyCollection(resolved.collectionId, [args.path]);
       return {
         content: [{ type: "text" as const, text: JSON.stringify({ path: args.path, commit: result.commit }) }],
       };
