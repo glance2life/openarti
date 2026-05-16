@@ -448,6 +448,7 @@ export const artiEngine: StorageEngine = {
   async getLog(collectionId, opts) {
     const rows = await listCommits(collectionId, {
       limit: opts?.limit ?? 20,
+      offset: opts?.offset,
       path: opts?.path,
     });
     return rows.map<LogCommit>((r) => ({
@@ -456,6 +457,7 @@ export const artiEngine: StorageEngine = {
       author: r.author,
       timestamp: r.timestamp.toISOString(),
       files: r.files,
+      fileDetails: r.fileDetails,
     }));
   },
 

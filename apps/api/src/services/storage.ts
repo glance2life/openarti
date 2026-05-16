@@ -47,7 +47,7 @@ export interface StorageEngine {
 
   getLog(
     collectionId: string,
-    opts?: { path?: string; limit?: number }
+    opts?: { path?: string; limit?: number; offset?: number }
   ): Promise<LogCommit[]>;
 
   getDiff(

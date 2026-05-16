@@ -1,18 +1,21 @@
 "use client";
 
-import { Settings, ChevronDown } from "lucide-react";
+import { Settings, ChevronDown, History, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useFinderNavigation } from "@/hooks/finder-navigation-context";
 import { useOpenDialog } from "@/hooks/use-dialog-router";
+import { useRouter } from "next/navigation";
 
 export function FinderToolbar() {
   const { selectedCollection, viewMode, hydrated } = useFinderNavigation();
   const openDialog = useOpenDialog();
+  const router = useRouter();
 
   if (!hydrated) {
     return <div className="flex h-12 shrink-0 items-center px-4" />;
@@ -44,6 +47,19 @@ export function FinderToolbar() {
           <ChevronDown className="size-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
+          <DropdownMenuItem
+            onClick={() => router.push(`/${owner}/${collection}/-/history`)}
+          >
+            <History className="mr-2 size-4" />
+            History
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => router.push(`/${owner}/${collection}/-/trash`)}
+          >
+            <Trash2 className="mr-2 size-4" />
+            Trash
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={() =>
               openDialog("collection-settings", { owner, collection })

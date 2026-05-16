@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { eq, and, desc, isNull, inArray } from "drizzle-orm";
+import { eq, and, desc, isNull, isNotNull, inArray } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
 import { engine } from "../services/storage.js";
 import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth.js";
@@ -115,7 +115,7 @@ collections.get(
 
     const results = await Promise.allSettled(
       allCollections.map(async (col) => {
-        const commits = await engine.getLog(col.id, { limit: 10 });
+        const commits = await engine.getLog(col.id, { limit: 30 });
         const files: { owner: string; collection: string; path: string; timestamp: string }[] = [];
         for (const commit of commits) {
           for (const file of commit.files) {
@@ -147,7 +147,7 @@ collections.get(
 
     const sorted = [...seen.values()]
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-      .slice(0, 50);
+      .slice(0, 100);
 
     // Batch-check deleted status per collection
     const colNameToId = new Map(allCollections.map((c) => [`${c.owner}/${c.name}`, c.id]));
@@ -444,6 +444,76 @@ collections.get(
     return c.json({
       commitId: row?.commitId ?? null,
       updatedAt: row?.timestamp.toISOString() ?? null,
+    });
+  }
+);
+
+// History — paginated commit log for a collection
+collections.get(
+  "/:owner/:collection/log",
+  optionalAuthMiddleware,
+  async (c) => {
+    const { owner, collection: collectionName } = c.req.param();
+    const page = Math.max(1, Number(c.req.query("page") ?? 1));
+    const limit = 20;
+    const offset = (page - 1) * limit;
+
+    const resolved = await resolveCollection(owner, collectionName);
+
+    if (resolved.visibility === "private") {
+      const user = c.get("user") as AuthUser | undefined;
+      if (!user) throw new AppError(ErrorCode.UNAUTHORIZED, "Authentication required for private collections");
+      await checkCollectionAccess(user.id, resolved.collectionId, resolved.ownerId, "read");
+    }
+
+    const commits = await engine.getLog(resolved.collectionId, { limit: limit + 1, offset });
+    const hasMore = commits.length > limit;
+    const items = hasMore ? commits.slice(0, limit) : commits;
+
+    return c.json({
+      commits: items.map((c) => ({
+        hash: c.hash,
+        message: c.message,
+        author: c.author,
+        timestamp: c.timestamp,
+        files: (c as any).fileDetails ?? c.files.map((f) => ({ path: f, action: "update" })),
+      })),
+      page,
+      hasMore,
+    });
+  }
+);
+
+// Trash — list all deleted files in a collection
+collections.get(
+  "/:owner/:collection/trash",
+  authMiddleware,
+  async (c) => {
+    const { owner, collection: collectionName } = c.req.param();
+    const user = c.get("user");
+
+    const resolved = await resolveCollection(owner, collectionName);
+    await checkCollectionAccess(user.id, resolved.collectionId, resolved.ownerId, "read");
+
+    const rows = await db
+      .select({
+        path: schema.artiFileSnapshot.path,
+        deletedAt: schema.artiFileSnapshot.deletedAt,
+      })
+      .from(schema.artiFileSnapshot)
+      .where(
+        and(
+          eq(schema.artiFileSnapshot.collectionId, resolved.collectionId),
+          isNotNull(schema.artiFileSnapshot.deletedAt)
+        )
+      )
+      .orderBy(desc(schema.artiFileSnapshot.deletedAt));
+
+    return c.json({
+      files: rows.map((r) => ({
+        path: r.path,
+        deletedAt: r.deletedAt!.toISOString(),
+      })),
     });
   }
 );

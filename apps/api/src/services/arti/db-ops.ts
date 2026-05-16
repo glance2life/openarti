@@ -190,11 +190,12 @@ export interface LogRow {
   message: string;
   timestamp: Date;
   files: string[];
+  fileDetails: { path: string; action: string }[];
 }
 
 export async function listCommits(
   collectionId: string,
-  opts: { limit: number; path?: string }
+  opts: { limit: number; offset?: number; path?: string }
 ): Promise<LogRow[]> {
   const rows = opts.path
     ? await db
@@ -216,6 +217,7 @@ export async function listCommits(
         .where(eq(schema.artiCommits.collectionId, collectionId))
         .orderBy(desc(schema.artiCommits.seq))
         .limit(opts.limit)
+        .offset(opts.offset ?? 0)
     : await db
         .select({
           id: schema.artiCommits.id,
@@ -227,7 +229,8 @@ export async function listCommits(
         .from(schema.artiCommits)
         .where(eq(schema.artiCommits.collectionId, collectionId))
         .orderBy(desc(schema.artiCommits.seq))
-        .limit(opts.limit);
+        .limit(opts.limit)
+        .offset(opts.offset ?? 0);
 
   if (rows.length === 0) return [];
   const commitIds = rows.map((r) => r.id);
@@ -235,14 +238,15 @@ export async function listCommits(
     .select({
       commitId: schema.artiCommitFiles.commitId,
       path: schema.artiCommitFiles.path,
+      action: schema.artiCommitFiles.action,
     })
     .from(schema.artiCommitFiles)
     .where(inArray(schema.artiCommitFiles.commitId, commitIds));
 
-  const filesByCommit = new Map<string, string[]>();
+  const filesByCommit = new Map<string, { path: string; action: string }[]>();
   for (const f of fileRows) {
     const arr = filesByCommit.get(f.commitId) ?? [];
-    arr.push(f.path);
+    arr.push({ path: f.path, action: f.action });
     filesByCommit.set(f.commitId, arr);
   }
 
@@ -251,7 +255,8 @@ export async function listCommits(
     author: r.author,
     message: r.message,
     timestamp: r.timestamp,
-    files: filesByCommit.get(r.id) ?? [],
+    files: (filesByCommit.get(r.id) ?? []).map((f) => f.path),
+    fileDetails: filesByCommit.get(r.id) ?? [],
   }));
 }
 
