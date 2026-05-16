@@ -48,10 +48,10 @@ export default async function handler(
         if (typeof req.body === "string" || Buffer.isBuffer(req.body)) {
           body = req.body as BodyInit;
         } else {
+          // Body was pre-parsed by Vercel into an object and re-encoded as JSON.
+          // Always set content-type to match the re-encoded body so Hono can parse it.
           body = JSON.stringify(req.body);
-          if (!headers.has("content-type")) {
-            headers.set("content-type", "application/json");
-          }
+          headers.set("content-type", "application/json");
         }
       }
     }
