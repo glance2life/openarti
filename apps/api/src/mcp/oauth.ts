@@ -5,7 +5,7 @@ import { db, schema } from "../db/index.js";
 import { auth } from "../auth.js";
 
 const BASE_URL = process.env.BETTER_AUTH_URL || "http://localhost:3001";
-const WEB_ORIGIN = process.env.WEB_ORIGIN || "http://localhost:3000";
+const WEB_ORIGIN = (process.env.WEB_ORIGIN || "http://localhost:3000").split(",")[0].trim();
 
 export const oauth = new Hono();
 
