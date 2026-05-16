@@ -524,6 +524,28 @@ export const artiEngine: StorageEngine = {
     });
   },
 
+  async restoreFile(collectionId, filePath, opts) {
+    validatePath(filePath);
+
+    const snap = await loadSnapshot(
+      db as unknown as Parameters<Parameters<typeof db.transaction>[0]>[0],
+      collectionId,
+      filePath
+    );
+    if (!snap) {
+      throw new AppError(ErrorCode.NOT_FOUND, `File '${filePath}' has no history to restore`);
+    }
+    if (snap.deletedAt === null) {
+      throw new AppError(ErrorCode.CONFLICT, `File '${filePath}' is not deleted`);
+    }
+
+    const result = await this.writeFile(collectionId, filePath, snap.content, {
+      message: opts?.message ?? `restore ${filePath}`,
+      author: opts?.author ?? DEFAULT_AUTHOR,
+    });
+    return { commit: result.commit };
+  },
+
   async fileExists(collectionId, filePath) {
     validatePath(filePath);
     const snap = await loadSnapshot(

@@ -309,6 +309,35 @@ export function createMcpServer() {
     }
   );
 
+  // ---- restore ----
+  server.registerTool(
+    "restore",
+    {
+      description: "Restore a previously deleted file in an OpenArti collection. Creates a new commit that brings back the file's last known content.",
+      inputSchema: {
+        owner: z.string(),
+        collection: z.string(),
+        path: z.string(),
+        message: z.string().optional(),
+      },
+    },
+    async (args, extra) => {
+      const user = getUser(extra);
+      const resolved = await resolveAndCheckEdit(args, user);
+
+      const result = await engine.restoreFile(resolved.collectionId, args.path, {
+        message: args.message,
+        author: `${user.name} <${user.email}>`,
+      });
+      await notifyCollection(resolved.collectionId, [args.path]);
+      return {
+        content: [
+          { type: "text" as const, text: JSON.stringify({ path: args.path, commit: result.commit }) },
+        ],
+      };
+    }
+  );
+
   // ---- grep ----
   server.registerTool(
     "grep",

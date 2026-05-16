@@ -21,6 +21,7 @@ interface RecentFile {
   collection: string;
   path: string;
   timestamp: string;
+  deleted?: boolean;
 }
 
 function formatRelativeTime(iso: string): string {
@@ -150,10 +151,10 @@ export function FileTreePanel() {
                       isActive
                         ? "bg-sidebar-accent text-sidebar-accent-foreground"
                         : ""
-                    }`}
+                    } ${file.deleted ? "opacity-40" : ""}`}
                   >
                     <FileIcon filename={filename} />
-                    <span className="truncate">{filename}</span>
+                    <span className={`truncate ${file.deleted ? "line-through" : ""}`}>{filename}</span>
                     <span
                       className="ml-auto shrink-0 text-xs text-muted-foreground"
                       title={new Date(file.timestamp).toLocaleString()}

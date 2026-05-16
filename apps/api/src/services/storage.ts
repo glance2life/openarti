@@ -29,6 +29,12 @@ export interface StorageEngine {
     opts?: { message?: string; author?: string }
   ): Promise<{ commit: string }>;
 
+  restoreFile(
+    collectionId: string,
+    filePath: string,
+    opts?: { message?: string; author?: string }
+  ): Promise<{ commit: string }>;
+
   listFiles(collectionId: string, dirPath?: string): Promise<LsEntry[]>;
 
   grepFiles(

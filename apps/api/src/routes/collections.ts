@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { eq, and, desc, isNull } from "drizzle-orm";
+import { eq, and, desc, isNull, inArray } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
 import { engine } from "../services/storage.js";
 import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth.js";
@@ -145,9 +145,47 @@ collections.get(
       }
     }
 
-    const files = [...seen.values()]
+    const sorted = [...seen.values()]
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .slice(0, 50);
+
+    // Batch-check deleted status per collection
+    const colNameToId = new Map(allCollections.map((c) => [`${c.owner}/${c.name}`, c.id]));
+    const colGroups = new Map<string, { colId: string; paths: string[] }>();
+    for (const f of sorted) {
+      const colKey = `${f.owner}/${f.collection}`;
+      const colId = colNameToId.get(colKey);
+      if (!colId) continue;
+      const g = colGroups.get(colId) ?? { colId, paths: [] };
+      g.paths.push(f.path);
+      colGroups.set(colId, g);
+    }
+
+    const deletedKeys = new Set<string>();
+    await Promise.all(
+      [...colGroups.values()].map(async ({ colId, paths }) => {
+        const snaps = await db
+          .select({ path: schema.artiFileSnapshot.path, deletedAt: schema.artiFileSnapshot.deletedAt })
+          .from(schema.artiFileSnapshot)
+          .where(
+            and(
+              eq(schema.artiFileSnapshot.collectionId, colId),
+              inArray(schema.artiFileSnapshot.path, paths)
+            )
+          );
+        const col = allCollections.find((c) => c.id === colId)!;
+        for (const snap of snaps) {
+          if (snap.deletedAt !== null) {
+            deletedKeys.add(`${col.owner}/${col.name}/${snap.path}`);
+          }
+        }
+      })
+    );
+
+    const files = sorted.map((f) => ({
+      ...f,
+      deleted: deletedKeys.has(`${f.owner}/${f.collection}/${f.path}`),
+    }));
 
     return c.json({ files });
   }

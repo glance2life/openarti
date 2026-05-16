@@ -70,6 +70,11 @@ const blameSchema = z.object({
   path: z.string().min(1),
 });
 
+const restoreSchema = z.object({
+  path: z.string().min(1),
+  message: z.string().optional(),
+});
+
 const lsSchema = z.object({
   path: z.string().optional(),
 });
@@ -306,6 +311,29 @@ tools.post(
 
     const lines = await engine.getBlame(resolved.collectionId, body.path);
     return c.json({ path: body.path, lines });
+  }
+);
+
+// restore — requires auth
+tools.post(
+  "/:owner/:collection/tools/restore",
+  authMiddleware,
+  zValidator("json", restoreSchema),
+  async (c) => {
+    const { owner, collection: collectionName } = c.req.param();
+    const body = c.req.valid("json");
+    const user = c.get("user");
+    const resolved = await resolveCollection(owner, collectionName);
+    await checkCollectionAccess(user.id, resolved.collectionId, resolved.ownerId, "edit");
+
+    const result = await engine.restoreFile(resolved.collectionId, body.path, {
+      message: body.message,
+      author: `${user.name} <${user.email}>`,
+    });
+
+    await notifyCollection(resolved.collectionId, [body.path]);
+
+    return c.json({ path: body.path, commit: result.commit });
   }
 );
 

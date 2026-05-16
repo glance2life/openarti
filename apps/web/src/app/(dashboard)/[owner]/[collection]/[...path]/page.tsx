@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { FileIcon } from "@/lib/file-icon";
 import { apiFetch } from "@/lib/api";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -9,6 +9,7 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { ArtifactViewer } from "@/components/artifact-viewer";
+import { RestoreButton } from "@/components/restore-button";
 
 interface LsEntry {
   name: string;
@@ -99,21 +100,24 @@ export default async function ArtifactPage({
     );
   }
 
-  // File not found
+  // File not found / deleted
   return (
     <div className="flex flex-1 items-center justify-center min-h-[60vh]">
       <div className="text-center space-y-3">
         <p className="text-4xl">🗂️</p>
-        <p className="text-sm font-medium text-foreground">文件已不存在</p>
+        <p className="text-sm font-medium text-foreground">文件已删除</p>
         <p className="text-xs text-muted-foreground">
-          <code className="bg-muted px-1 py-0.5 rounded">{filename}</code> 已被删除或移动
+          <code className="bg-muted px-1 py-0.5 rounded">{filename}</code> 已被删除，但可以从历史记录恢复
         </p>
-        <Link
-          href={`/${owner}/${collection}`}
-          className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
-        >
-          返回 {collection}
-        </Link>
+        <RestoreButton owner={owner} collection={collection} filePath={filePath} />
+        <div>
+          <Link
+            href={`/${owner}/${collection}`}
+            className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+          >
+            返回 {collection}
+          </Link>
+        </div>
       </div>
     </div>
   );
