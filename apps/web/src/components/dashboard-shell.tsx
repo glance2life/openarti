@@ -31,7 +31,7 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
               <FileTreePanel />
 
               {/* Column 3: Content (full height) */}
-              <main className="flex-1 overflow-hidden bg-background">
+              <main className="flex-1 overflow-y-auto bg-background">
                 {children}
               </main>
             </div>
