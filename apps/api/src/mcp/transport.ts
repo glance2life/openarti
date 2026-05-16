@@ -6,6 +6,8 @@ import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { eq, sql } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
 
+const BASE_URL = process.env.BETTER_AUTH_URL || "http://localhost:3001";
+
 export const mcp = new Hono();
 
 async function resolveApiKey(rawKey: string) {
@@ -68,6 +70,16 @@ async function resolveAuthInfo(req: Request): Promise<{ authInfo?: AuthInfo }> {
 // Works under any serverless runtime (Vercel Functions / Workers / Lambda).
 mcp.post("/", async (c) => {
   const { authInfo } = await resolveAuthInfo(c.req.raw);
+
+  if (!authInfo) {
+    return c.json(
+      { error: "unauthorized", error_description: "Valid API key required" },
+      401,
+      {
+        "WWW-Authenticate": `Bearer realm="openarti", resource_metadata="${BASE_URL}/.well-known/oauth-protected-resource"`,
+      },
+    );
+  }
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
