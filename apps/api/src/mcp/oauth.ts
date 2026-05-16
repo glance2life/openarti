@@ -158,16 +158,26 @@ oauth.post("/oauth/authorize", async (c) => {
 // ---- Token Endpoint ----
 
 oauth.post("/oauth/token", async (c) => {
-  const body = await c.req.parseBody();
-  const grantType = body.grant_type as string;
+  // RFC 6749 requires form-encoded, but some clients (e.g. Claude Code) send JSON
+  let grantType: string, code: string, codeVerifier: string, redirectUri: string;
+  const contentType = c.req.header("Content-Type") || "";
+  if (contentType.includes("application/json")) {
+    const json = await c.req.json();
+    grantType = json.grant_type;
+    code = json.code;
+    codeVerifier = json.code_verifier;
+    redirectUri = json.redirect_uri;
+  } else {
+    const body = await c.req.parseBody();
+    grantType = body.grant_type as string;
+    code = body.code as string;
+    codeVerifier = body.code_verifier as string;
+    redirectUri = body.redirect_uri as string;
+  }
 
   if (grantType !== "authorization_code") {
     return c.json({ error: "unsupported_grant_type" }, 400);
   }
-
-  const code = body.code as string;
-  const codeVerifier = body.code_verifier as string;
-  const redirectUri = body.redirect_uri as string;
 
   // Look up auth code
   const [authCode] = await db
